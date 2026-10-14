@@ -1,0 +1,10 @@
+[package]
+name = "git-data"
+description = "Reads git repository data and runs git actions through the git CLI. No Tauri dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

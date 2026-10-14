@@ -25,7 +25,7 @@ Probes (how each task is verified):
   - Acceptance: two runs into different directories give identical SHAs for all commits and the stash; the script still refuses existing paths.
   - Probe: logic (run twice, compare `git rev-parse` of all refs and `refs/stash`).
 
-- [ ] **Scaffold: Tauri 2 + React + TS + Vite, workspace, tooling**
+- [x] **Scaffold: Tauri 2 + React + TS + Vite, workspace, tooling**
   - pnpm project; TypeScript strict; Vitest; ESLint + Prettier; Cargo workspace with `crates/git-data` and `src-tauri`.
   - `pnpm test`, `pnpm typecheck`, `pnpm lint`, `cargo fmt --check`, `cargo clippy`, `cargo test -p git-data` all pass.
   - README: what the project is, prerequisites, dev commands. CLAUDE.md: the real commands.

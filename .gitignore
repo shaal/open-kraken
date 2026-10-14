@@ -1,0 +1,22 @@
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+/target
+src-tauri/gen/schemas
+
+# Test output
+coverage
+test-results
+playwright-report
+
+# Logs
+*.log
+
+# Local files
+*.local
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.tsbuildinfo
