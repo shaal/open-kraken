@@ -47,7 +47,7 @@ Probes (how each task is verified):
   - Errors: not a repo → typed error; empty repo (no commits) → empty result, not an error; path with spaces works.
   - Probe: logic (`cargo test -p git-data` against the fixture repo built in a temp dir, plus unit tests for the parser).
 
-- [ ] **git-data: working tree and stashes**
+- [x] **git-data: working tree and stashes**
   - `status(repo)`: staged and unstaged files with change type (modified, added, deleted, renamed, untracked). Parse `git status --porcelain=v2 -z`.
   - `stashes(repo)`: index, message, stash commit sha, base commit sha.
   - `log()` must also include each stash's base commit, so a stash row always has a commit to connect to (§1), even when no branch contains it.

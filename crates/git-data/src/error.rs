@@ -14,6 +14,8 @@ pub enum GitError {
     NotARepository(PathBuf),
     /// The path is inside a repository but is not its root; open `root` instead.
     NotRepositoryRoot { path: PathBuf, root: PathBuf },
+    /// A value passed in (for example a commit id) is not valid.
+    InvalidArgument(String),
     /// A git command exited with an error.
     CommandFailed {
         /// The git arguments, for example `log --date-order ...`.
@@ -40,6 +42,7 @@ impl fmt::Display for GitError {
                 path.display(),
                 root.display()
             ),
+            Self::InvalidArgument(detail) => write!(f, "invalid argument: {detail}"),
             Self::CommandFailed {
                 command,
                 code,

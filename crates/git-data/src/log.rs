@@ -35,9 +35,9 @@ const LOG_FORMAT: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%ad%x00%cd%x00%s";
 const FIELDS: usize = 7;
 
 impl Repo {
-    /// Every commit reachable from local branches, remote branches, tags and HEAD
-    /// (stash commits are not included), children before parents. An empty
-    /// repository gives an empty list.
+    /// Every commit reachable from local branches, remote branches, tags, HEAD and
+    /// the commits stashes were made on, children before parents. The stash commits
+    /// themselves are not included. An empty repository gives an empty list.
     ///
     /// The history is what `git log` shows, so replace refs (`refs/replace/`) are
     /// honored, as they are by the git commands that later act on it. A corrupt
@@ -57,6 +57,9 @@ impl Repo {
         if self.head_commit()?.is_some() {
             args.push("HEAD");
         }
+        // So can the commit a stash was made on; a stash row needs it in the graph.
+        let stash_bases: Vec<String> = self.stashes()?.into_iter().map(|s| s.base_sha).collect();
+        args.extend(stash_bases.iter().map(String::as_str));
         args.push("--");
         let out = self.run(&args)?;
         parse_log(&out).map_err(|detail| unexpected(&args, detail))

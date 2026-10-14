@@ -341,7 +341,10 @@ Reset columns to compact layout
   - Unstaged files with **Stage All Changes**, then Staged files.
   - The commit form: summary, description, and "Amend previous commit".
   - The **Stage Changes to Commit** button.
-- **Multi-selection**: "N commits selected" and a list of the selected commits (message, date, author, SHA), then the combined file list.
+- **Multi-selection**: "N commits selected" and a list of the selected commits (message, date, author, SHA), then the combined file list. `[obs]` The file list depends on the count:
+  - Exactly 2 commits: the difference between the two, from the older to the newer. Example: `Fix typo in docs` + `Add login form` → docs.md added, login.js deleted. `Update roadmap` + its parent `Add metrics endpoint` → README.md modified only.
+  - 3 or more: one combined diff from the first parent of the oldest to the newest, so the oldest commit's own changes count. Example: `Scaffold graph view` … `Add context menu on commits` → graph.js added.
+  - `git-data`'s `range_files` implements this. "Older" and "newer" follow ancestry (a parent is always older than its child, whatever the dates say); unrelated commits go by commit date.
 
 ## 5. Keyboard shortcuts `[obs]`
 
