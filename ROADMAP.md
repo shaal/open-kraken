@@ -40,7 +40,7 @@ Probes (how each task is verified):
 
 ## Data
 
-- [ ] **git-data: commits, refs, HEAD**
+- [x] **git-data: commits, refs, HEAD**
   - `log(repo)`: every commit reachable from branches, remote branches and tags (not stash internals). Fields: sha, parents, author name/email, author time, committer time, subject.
   - `refs(repo)`: local branches, remote branches, tags (annotated tags peeled to the commit), `HEAD` (branch or detached), upstream of each local branch.
   - Parse with NUL separators. Subjects with tabs, `%`, newlines in the body, or non-UTF-8 bytes must not break parsing.
@@ -50,6 +50,7 @@ Probes (how each task is verified):
 - [ ] **git-data: working tree and stashes**
   - `status(repo)`: staged and unstaged files with change type (modified, added, deleted, renamed, untracked). Parse `git status --porcelain=v2 -z`.
   - `stashes(repo)`: index, message, stash commit sha, base commit sha.
+  - `log()` must also include each stash's base commit, so a stash row always has a commit to connect to (§1), even when no branch contains it.
   - `commit_files(repo, sha)`: changed files of one commit (first parent; root commit vs empty tree). `range_files(repo, shas)` for a multi-selection.
   - Probe: logic (fixture repo: README.md modified, notes.txt untracked, 1 stash).
 
@@ -58,6 +59,8 @@ Probes (how each task is verified):
   - Adapter interface in `src/`; Tauri adapter; fixture adapter that loads `fixtures/demo-repo.json`.
   - A dump tool (`cargo run -p git-data --bin dump -- <repo>`) writes that JSON; a script rebuilds the demo repo and regenerates the JSON.
   - Open a repo from a CLI argument or a folder dialog. Show a typed error for a non-repo.
+  - Serialize `GitError` with a `kind` the UI can switch on; for `NotRepositoryRoot`, offer to open the root.
+  - Measure the IPC cost of `log()`: 100 000 commits are about 14 MB of git output and 24 MB of JSON. Page or stream it if one call is too slow (or record the number for the Performance task).
   - Probe: logic (adapter tests) + app (open the demo repo, see the commit count).
 
 ## Layout
@@ -109,6 +112,7 @@ Probes (how each task is verified):
 
 - [ ] **Details panel** (§4)
   - Single commit: sha, message, author, date, parent(s), file list with change-type icons, Path / Tree toggle.
+  - Read the full message body on demand (a `commit_message(sha)` reader), not in `log()`.
   - Multi-selection: "N commits selected", commit list, header "Viewing diff between 2 commits" for 2 and "Viewing diff of N commits" for 3+, combined file list.
   - WIP: unstaged and staged file lists (read-only in this roadmap).
   - Panel hides when the selection is cleared.
@@ -141,6 +145,7 @@ Probes (how each task is verified):
   - Probe: logic (temp fixture copies, clean case and conflict case).
 
 - [ ] **Actions: delete and rename refs, stash actions**
+  - Ref names that are not valid UTF-8 arrive with U+FFFD and cannot be passed back to git: disable actions on them.
   - Delete branch (confirm; not the current branch), rename branch (prompt), delete tag locally.
   - Stash: apply, pop, delete (confirm), edit stash message.
   - Probe: logic (temp fixture copies) + ui.
@@ -155,6 +160,7 @@ Probes (how each task is verified):
 
 - [ ] **Auto-refresh**
   - Watch the repo (`notify` crate) and refresh the graph on changes, debounced; ignore our own lock files. Keep the selection and scroll position across refreshes.
+  - `log()` and `refs()` are separate git runs; make sure a refresh that lands between them cannot show a ref pointing at a commit missing from the log.
   - Probe: logic (watcher test on a temp repo) + app.
 
 - [ ] **Performance on large repos**
