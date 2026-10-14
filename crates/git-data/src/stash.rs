@@ -1,13 +1,15 @@
 //! Reading stashes.
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::error::GitError;
 use crate::log::object_id;
 use crate::repo::{Repo, unexpected};
 
 /// One stash entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Stash {
     /// Position in the stash list; 0 is the newest.
@@ -21,6 +23,7 @@ pub struct Stash {
     /// The commit the stash was made on (the stash commit's first parent).
     pub base_sha: String,
     /// When the stash was made, in Unix seconds.
+    #[ts(type = "number")]
     pub time: i64,
 }
 

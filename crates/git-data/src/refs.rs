@@ -1,13 +1,15 @@
 //! Reading branches, tags and HEAD.
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::error::GitError;
 use crate::log::object_id;
 use crate::repo::{Repo, unexpected};
 
 /// What a ref is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum RefKind {
     LocalBranch,
@@ -16,7 +18,8 @@ pub enum RefKind {
 }
 
 /// A branch or tag that points at a commit.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Ref {
     /// Full name, for example `refs/remotes/origin/main`.
@@ -36,7 +39,8 @@ pub struct Ref {
 }
 
 /// Where HEAD points.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -55,7 +59,8 @@ pub enum Head {
 }
 
 /// All branches and tags, and HEAD.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoRefs {
     pub head: Head,

@@ -1,12 +1,15 @@
 //! Reading commit history.
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::error::GitError;
 use crate::repo::{Repo, unexpected};
+use crate::stash::Stash;
 
 /// One commit in the history.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Commit {
     /// Full object id (40 hex digits for SHA-1, 64 for SHA-256).
@@ -19,10 +22,12 @@ pub struct Commit {
     pub author_email: String,
     /// When the commit was authored: Unix time in seconds, and the author's UTC
     /// offset in minutes (east positive). Both are 0 if git cannot read the date.
+    #[ts(type = "number")]
     pub author_time: i64,
     pub author_tz_offset: i32,
     /// When the commit was committed, in Unix seconds (0 if unreadable). Used to
     /// order history newest first.
+    #[ts(type = "number")]
     pub committer_time: i64,
     /// First paragraph of the message, joined into one line (git's `%s`).
     pub subject: String,
@@ -43,6 +48,11 @@ impl Repo {
     /// honored, as they are by the git commands that later act on it. A corrupt
     /// commit with NUL bytes in its headers gives [`GitError::UnexpectedOutput`].
     pub fn log(&self) -> Result<Vec<Commit>, GitError> {
+        self.log_with_stashes(&self.stashes()?)
+    }
+
+    /// [`Repo::log`] with the stash list already read.
+    pub(crate) fn log_with_stashes(&self, stashes: &[Stash]) -> Result<Vec<Commit>, GitError> {
         let mut args = vec![
             "log",
             "--date-order",
@@ -58,8 +68,7 @@ impl Repo {
             args.push("HEAD");
         }
         // So can the commit a stash was made on; a stash row needs it in the graph.
-        let stash_bases: Vec<String> = self.stashes()?.into_iter().map(|s| s.base_sha).collect();
-        args.extend(stash_bases.iter().map(String::as_str));
+        args.extend(stashes.iter().map(|s| s.base_sha.as_str()));
         args.push("--");
         let out = self.run(&args)?;
         parse_log(&out).map_err(|detail| unexpected(&args, detail))

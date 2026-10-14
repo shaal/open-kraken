@@ -1,0 +1,557 @@
+{
+  "info": {
+    "root": "demo-repo",
+    "gitDir": "demo-repo/.git",
+    "bare": false,
+    "name": "demo-repo"
+  },
+  "graph": {
+    "log": [
+      {
+        "sha": "35883939c0918f6444fc665a61ab7484048769c3",
+        "parents": [
+          "09d98ff68514e3feade031e07c7c571f6bc9901f"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759436800,
+        "authorTzOffset": 0,
+        "committerTime": 1759436800,
+        "subject": "Update roadmap"
+      },
+      {
+        "sha": "f66fbcbcf0a309271a0fadc40a780db5ae36e8e7",
+        "parents": [
+          "9875e2899a3f20d11cc3cf26b0b1be534151bfa8"
+        ],
+        "authorName": "Carol",
+        "authorEmail": "carol@example.com",
+        "authorTime": 1759429600,
+        "authorTzOffset": 0,
+        "committerTime": 1759429600,
+        "subject": "Highlight branch on hover"
+      },
+      {
+        "sha": "09d98ff68514e3feade031e07c7c571f6bc9901f",
+        "parents": [
+          "7b0c8b331f8f48d0389c4c194643bd1773956bbd"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759422400,
+        "authorTzOffset": 0,
+        "committerTime": 1759422400,
+        "subject": "Add metrics endpoint"
+      },
+      {
+        "sha": "7b0c8b331f8f48d0389c4c194643bd1773956bbd",
+        "parents": [
+          "5620354f0963bb9bfa903d7b6b42681602cdb3ce",
+          "9cf147ff2783358c80132b7fa83c80b99c4b4a10"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759415200,
+        "authorTzOffset": 0,
+        "committerTime": 1759415200,
+        "subject": "Merge branch 'release/1.1'"
+      },
+      {
+        "sha": "9cf147ff2783358c80132b7fa83c80b99c4b4a10",
+        "parents": [
+          "5620354f0963bb9bfa903d7b6b42681602cdb3ce"
+        ],
+        "authorName": "Erin",
+        "authorEmail": "erin@example.com",
+        "authorTime": 1759408000,
+        "authorTzOffset": 0,
+        "committerTime": 1759408000,
+        "subject": "Prepare 1.1 release notes"
+      },
+      {
+        "sha": "9875e2899a3f20d11cc3cf26b0b1be534151bfa8",
+        "parents": [
+          "9e22569170beb422dd7c817d10ffcc0d86507191"
+        ],
+        "authorName": "Carol",
+        "authorEmail": "carol@example.com",
+        "authorTime": 1759400800,
+        "authorTzOffset": 0,
+        "committerTime": 1759400800,
+        "subject": "Add context menu on commits"
+      },
+      {
+        "sha": "9e22569170beb422dd7c817d10ffcc0d86507191",
+        "parents": [
+          "f0b9edec70c9626b3b7fabc50f20a8ab57d573f4"
+        ],
+        "authorName": "Carol",
+        "authorEmail": "carol@example.com",
+        "authorTime": 1759393600,
+        "authorTzOffset": 0,
+        "committerTime": 1759393600,
+        "subject": "Draw commit lanes"
+      },
+      {
+        "sha": "5620354f0963bb9bfa903d7b6b42681602cdb3ce",
+        "parents": [
+          "2684f16b74511c5b125c2c3e448ff1444721d53e"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759386400,
+        "authorTzOffset": 0,
+        "committerTime": 1759386400,
+        "subject": "Add health endpoint"
+      },
+      {
+        "sha": "f0b9edec70c9626b3b7fabc50f20a8ab57d573f4",
+        "parents": [
+          "2684f16b74511c5b125c2c3e448ff1444721d53e"
+        ],
+        "authorName": "Carol",
+        "authorEmail": "carol@example.com",
+        "authorTime": 1759379200,
+        "authorTzOffset": 0,
+        "committerTime": 1759379200,
+        "subject": "Scaffold graph view"
+      },
+      {
+        "sha": "2684f16b74511c5b125c2c3e448ff1444721d53e",
+        "parents": [
+          "d2a42546e84000ef4e7335c696bcb2184f30612b",
+          "877a264c3e19e5dc6ab57ada951e56e6649f07cb"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759372000,
+        "authorTzOffset": 0,
+        "committerTime": 1759372000,
+        "subject": "Merge branch 'feature/login'"
+      },
+      {
+        "sha": "c6653c402cd8f455bddb27ba21d10896ff9f071b",
+        "parents": [
+          "56b917def3eaa1c464f49c4be1bb4a472abea111"
+        ],
+        "authorName": "Dave",
+        "authorEmail": "dave@example.com",
+        "authorTime": 1759364800,
+        "authorTzOffset": 0,
+        "committerTime": 1759364800,
+        "subject": "Add regression test for crash"
+      },
+      {
+        "sha": "877a264c3e19e5dc6ab57ada951e56e6649f07cb",
+        "parents": [
+          "8bbbee869deec93f490dcbec3df5bf9375ca43c3"
+        ],
+        "authorName": "Bob",
+        "authorEmail": "bob@example.com",
+        "authorTime": 1759357600,
+        "authorTzOffset": 0,
+        "committerTime": 1759357600,
+        "subject": "Add remember-me option"
+      },
+      {
+        "sha": "d2a42546e84000ef4e7335c696bcb2184f30612b",
+        "parents": [
+          "b991281ecf9ad85955b42cffc182fb23bb7ee68f"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759350400,
+        "authorTzOffset": 0,
+        "committerTime": 1759350400,
+        "subject": "Fix typo in docs"
+      },
+      {
+        "sha": "8bbbee869deec93f490dcbec3df5bf9375ca43c3",
+        "parents": [
+          "2c2c60f2f27cea7fb016611a4584b85d1ab8ee6b"
+        ],
+        "authorName": "Bob",
+        "authorEmail": "bob@example.com",
+        "authorTime": 1759343200,
+        "authorTzOffset": 0,
+        "committerTime": 1759343200,
+        "subject": "Validate email field"
+      },
+      {
+        "sha": "2c2c60f2f27cea7fb016611a4584b85d1ab8ee6b",
+        "parents": [
+          "b991281ecf9ad85955b42cffc182fb23bb7ee68f"
+        ],
+        "authorName": "Bob",
+        "authorEmail": "bob@example.com",
+        "authorTime": 1759336000,
+        "authorTzOffset": 0,
+        "committerTime": 1759336000,
+        "subject": "Add login form"
+      },
+      {
+        "sha": "56b917def3eaa1c464f49c4be1bb4a472abea111",
+        "parents": [
+          "30acb933d8235159792cc6c22ff4ed5b0512544f"
+        ],
+        "authorName": "Dave",
+        "authorEmail": "dave@example.com",
+        "authorTime": 1759328800,
+        "authorTzOffset": 0,
+        "committerTime": 1759328800,
+        "subject": "Guard against null config"
+      },
+      {
+        "sha": "b991281ecf9ad85955b42cffc182fb23bb7ee68f",
+        "parents": [
+          "30acb933d8235159792cc6c22ff4ed5b0512544f"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759321600,
+        "authorTzOffset": 0,
+        "committerTime": 1759321600,
+        "subject": "Document setup steps"
+      },
+      {
+        "sha": "30acb933d8235159792cc6c22ff4ed5b0512544f",
+        "parents": [
+          "0a8890921e7ea68eb32f8d3036b2328d0a3b1156"
+        ],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759314400,
+        "authorTzOffset": 0,
+        "committerTime": 1759314400,
+        "subject": "Add build script"
+      },
+      {
+        "sha": "0a8890921e7ea68eb32f8d3036b2328d0a3b1156",
+        "parents": [],
+        "authorName": "Alice",
+        "authorEmail": "alice@example.com",
+        "authorTime": 1759307200,
+        "authorTzOffset": 0,
+        "committerTime": 1759307200,
+        "subject": "Initial commit"
+      }
+    ],
+    "refs": {
+      "head": {
+        "type": "branch",
+        "name": "refs/heads/main",
+        "shortName": "main",
+        "sha": "35883939c0918f6444fc665a61ab7484048769c3"
+      },
+      "refs": [
+        {
+          "name": "refs/heads/bugfix/crash-on-start",
+          "shortName": "bugfix/crash-on-start",
+          "kind": "localBranch",
+          "remote": null,
+          "sha": "c6653c402cd8f455bddb27ba21d10896ff9f071b",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/heads/feature/graph-view",
+          "shortName": "feature/graph-view",
+          "kind": "localBranch",
+          "remote": null,
+          "sha": "f66fbcbcf0a309271a0fadc40a780db5ae36e8e7",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/heads/feature/login",
+          "shortName": "feature/login",
+          "kind": "localBranch",
+          "remote": null,
+          "sha": "877a264c3e19e5dc6ab57ada951e56e6649f07cb",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/heads/main",
+          "shortName": "main",
+          "kind": "localBranch",
+          "remote": null,
+          "sha": "35883939c0918f6444fc665a61ab7484048769c3",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/heads/release/1.1",
+          "shortName": "release/1.1",
+          "kind": "localBranch",
+          "remote": null,
+          "sha": "9cf147ff2783358c80132b7fa83c80b99c4b4a10",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/remotes/origin/bugfix/crash-on-start",
+          "shortName": "origin/bugfix/crash-on-start",
+          "kind": "remoteBranch",
+          "remote": "origin",
+          "sha": "c6653c402cd8f455bddb27ba21d10896ff9f071b",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/remotes/origin/feature/login",
+          "shortName": "origin/feature/login",
+          "kind": "remoteBranch",
+          "remote": "origin",
+          "sha": "877a264c3e19e5dc6ab57ada951e56e6649f07cb",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/remotes/origin/main",
+          "shortName": "origin/main",
+          "kind": "remoteBranch",
+          "remote": "origin",
+          "sha": "7b0c8b331f8f48d0389c4c194643bd1773956bbd",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/tags/v1.0",
+          "shortName": "v1.0",
+          "kind": "tag",
+          "remote": null,
+          "sha": "b991281ecf9ad85955b42cffc182fb23bb7ee68f",
+          "annotated": false,
+          "upstream": null
+        },
+        {
+          "name": "refs/tags/v1.1",
+          "shortName": "v1.1",
+          "kind": "tag",
+          "remote": null,
+          "sha": "9cf147ff2783358c80132b7fa83c80b99c4b4a10",
+          "annotated": false,
+          "upstream": null
+        }
+      ]
+    },
+    "status": {
+      "staged": [],
+      "unstaged": [
+        {
+          "path": "README.md",
+          "oldPath": null,
+          "kind": "modified"
+        },
+        {
+          "path": "notes.txt",
+          "oldPath": null,
+          "kind": "untracked"
+        }
+      ],
+      "conflicted": [],
+      "skipped": null
+    },
+    "stashes": [
+      {
+        "index": 0,
+        "selector": "stash@{0}",
+        "message": "On main: WIP: experiment with caching",
+        "sha": "ece8df0b818b6a851e8c5b1c454c4f1ca7c82c01",
+        "baseSha": "35883939c0918f6444fc665a61ab7484048769c3",
+        "time": 1759444000
+      }
+    ]
+  },
+  "commitFiles": {
+    "09d98ff68514e3feade031e07c7c571f6bc9901f": [
+      {
+        "path": "api.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "0a8890921e7ea68eb32f8d3036b2328d0a3b1156": [
+      {
+        "path": "README.md",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "2684f16b74511c5b125c2c3e448ff1444721d53e": [
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "2c2c60f2f27cea7fb016611a4584b85d1ab8ee6b": [
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "30acb933d8235159792cc6c22ff4ed5b0512544f": [
+      {
+        "path": "build.sh",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "35883939c0918f6444fc665a61ab7484048769c3": [
+      {
+        "path": "README.md",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "5620354f0963bb9bfa903d7b6b42681602cdb3ce": [
+      {
+        "path": "api.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "56b917def3eaa1c464f49c4be1bb4a472abea111": [
+      {
+        "path": "app.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "7b0c8b331f8f48d0389c4c194643bd1773956bbd": [
+      {
+        "path": "CHANGELOG.md",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "877a264c3e19e5dc6ab57ada951e56e6649f07cb": [
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "8bbbee869deec93f490dcbec3df5bf9375ca43c3": [
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "9875e2899a3f20d11cc3cf26b0b1be534151bfa8": [
+      {
+        "path": "graph.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "9cf147ff2783358c80132b7fa83c80b99c4b4a10": [
+      {
+        "path": "CHANGELOG.md",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "9e22569170beb422dd7c817d10ffcc0d86507191": [
+      {
+        "path": "graph.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "b991281ecf9ad85955b42cffc182fb23bb7ee68f": [
+      {
+        "path": "README.md",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "c6653c402cd8f455bddb27ba21d10896ff9f071b": [
+      {
+        "path": "app.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "d2a42546e84000ef4e7335c696bcb2184f30612b": [
+      {
+        "path": "docs.md",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "f0b9edec70c9626b3b7fabc50f20a8ab57d573f4": [
+      {
+        "path": "graph.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "f66fbcbcf0a309271a0fadc40a780db5ae36e8e7": [
+      {
+        "path": "graph.js",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ]
+  },
+  "rangeFiles": {
+    "09d98ff68514e3feade031e07c7c571f6bc9901f,2684f16b74511c5b125c2c3e448ff1444721d53e,35883939c0918f6444fc665a61ab7484048769c3,5620354f0963bb9bfa903d7b6b42681602cdb3ce,7b0c8b331f8f48d0389c4c194643bd1773956bbd,877a264c3e19e5dc6ab57ada951e56e6649f07cb,8bbbee869deec93f490dcbec3df5bf9375ca43c3,9cf147ff2783358c80132b7fa83c80b99c4b4a10,d2a42546e84000ef4e7335c696bcb2184f30612b": [
+      {
+        "path": "CHANGELOG.md",
+        "oldPath": null,
+        "kind": "added"
+      },
+      {
+        "path": "README.md",
+        "oldPath": null,
+        "kind": "modified"
+      },
+      {
+        "path": "api.js",
+        "oldPath": null,
+        "kind": "added"
+      },
+      {
+        "path": "docs.md",
+        "oldPath": null,
+        "kind": "added"
+      },
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ],
+    "09d98ff68514e3feade031e07c7c571f6bc9901f,b052897d3a687fb2bcae317899dc875e26dfdeb2": [
+      {
+        "path": "README.md",
+        "oldPath": null,
+        "kind": "modified"
+      }
+    ],
+    "2c2c60f2f27cea7fb016611a4584b85d1ab8ee6b,d2a42546e84000ef4e7335c696bcb2184f30612b": [
+      {
+        "path": "docs.md",
+        "oldPath": null,
+        "kind": "added"
+      },
+      {
+        "path": "login.js",
+        "oldPath": null,
+        "kind": "deleted"
+      }
+    ],
+    "9875e2899a3f20d11cc3cf26b0b1be534151bfa8,9e22569170beb422dd7c817d10ffcc0d86507191,f0b9edec70c9626b3b7fabc50f20a8ab57d573f4": [
+      {
+        "path": "graph.js",
+        "oldPath": null,
+        "kind": "added"
+      }
+    ]
+  }
+}

@@ -1,13 +1,15 @@
 //! Changed files: the working tree status, and the files changed by commits.
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::error::GitError;
 use crate::log::object_id;
 use crate::repo::{Repo, unexpected};
 
 /// How a file changed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum ChangeKind {
     Added,
@@ -24,7 +26,8 @@ pub enum ChangeKind {
 }
 
 /// One changed file. Paths are relative to the work tree root and use `/`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct FileChange {
     pub path: String,
@@ -34,7 +37,8 @@ pub struct FileChange {
 }
 
 /// Uncommitted changes in the work tree.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkingTreeStatus {
     /// Changes in the index (what the next commit would contain).
@@ -43,6 +47,10 @@ pub struct WorkingTreeStatus {
     pub unstaged: Vec<FileChange>,
     /// Files with unresolved merge conflicts.
     pub conflicted: Vec<FileChange>,
+    /// Why the status was not read, when it was not: the repository's own config
+    /// defines filter programs, which `git status` would run (see the
+    /// repository-trust task in ROADMAP.md). The lists are then empty.
+    pub skipped: Option<String>,
 }
 
 impl WorkingTreeStatus {
@@ -61,17 +69,46 @@ impl Repo {
         if self.work_dir().is_none() {
             return Ok(WorkingTreeStatus::default());
         }
+        let drivers = self.repository_filter_drivers()?;
+        if !drivers.is_empty() {
+            return Ok(WorkingTreeStatus {
+                skipped: Some(format!(
+                    "this repository's own config defines filter programs ({}), which reading the working tree would run",
+                    drivers.join(", ")
+                )),
+                ..WorkingTreeStatus::default()
+            });
+        }
         let args = [
             "status",
             "--porcelain=v2",
             "-z",
             "--untracked-files=all",
             "--renames",
-            // Report submodule changes even if .gitmodules or config says to hide them.
-            "--ignore-submodules=none",
+            // New commits in submodules are reported, whatever .gitmodules or config
+            // says; their work trees are not read, so no git runs inside a submodule
+            // (whose own config could define filters).
+            "--ignore-submodules=dirty",
         ];
         let out = self.run(&args)?;
         parse_status(&out).map_err(|detail| unexpected(&args, detail))
+    }
+
+    /// Filter drivers (`filter.<name>.clean`, `.smudge`, `.process`) defined in this
+    /// repository's own config files (local or worktree scope). Filters from the
+    /// user's global or system config (such as Git LFS) are the user's own and are
+    /// not listed. Reading config never runs a program.
+    fn repository_filter_drivers(&self) -> Result<Vec<String>, GitError> {
+        let args = [
+            "config",
+            "--show-scope",
+            "--get-regexp",
+            r"^filter\..*\.(clean|smudge|process)$",
+        ];
+        match self.run_optional(&args)? {
+            Some(out) => Ok(repository_scoped_drivers(&String::from_utf8_lossy(&out))),
+            None => Ok(Vec::new()), // exit 1: no matching keys
+        }
     }
 
     /// The files one commit changed, compared with its first parent (a root
@@ -85,8 +122,10 @@ impl Repo {
     /// The files changed by a multi-selection of commits, as the details panel
     /// shows them (spec §4):
     /// - exactly 2 commits: the difference between the two (older to newer);
-    /// - 3 or more: one combined diff, from the first parent of the oldest to the
-    ///   newest (so the oldest commit's own changes are included).
+    /// - 3 or more: one combined diff to the newest, from the first parent of the
+    ///   oldest selected commit on the newest commit's first-parent line (or of the
+    ///   oldest overall when no other selected commit is on that line). So the
+    ///   oldest commit's own changes are included.
     ///
     /// "Older" and "newer" follow ancestry (a parent is always older than its
     /// child, whatever the dates say); unrelated commits go by commit date.
@@ -136,13 +175,22 @@ impl Repo {
             return Err(unexpected(&args, "not every selected commit was listed"));
         }
         let (newest, oldest) = (ordered[0], ordered[ordered.len() - 1]);
-        match ordered.len() {
-            2 => self.diff_files(Some(oldest), newest),
-            _ => {
-                let base = self.first_parent(oldest)?;
-                self.diff_files(base.as_deref(), newest)
-            }
+        if ordered.len() == 2 {
+            return self.diff_files(Some(oldest), newest);
         }
+        // 3 or more: start from the oldest selected commit on the newest one's
+        // first-parent line (GitKraken does; spec §4), else the oldest overall.
+        let mut line_args = vec!["rev-list", "--first-parent", newest];
+        line_args.extend(stop.as_deref());
+        line_args.push("--");
+        let line = self.run(&line_args)?;
+        let deepest = line
+            .split(|b| *b == b'\n')
+            .filter_map(|l| std::str::from_utf8(l).ok())
+            .rfind(|sha| *sha != newest && wanted.contains(sha))
+            .unwrap_or(oldest);
+        let base = self.first_parent(deepest)?;
+        self.diff_files(base.as_deref(), newest)
     }
 
     /// The id of the empty tree in this repository's hash format.
@@ -191,6 +239,26 @@ impl Repo {
         let out = self.run(&args)?;
         parse_name_status(&out).map_err(|detail| unexpected(&args, detail))
     }
+}
+
+/// Filter driver names from `git config --show-scope --get-regexp` output
+/// ("<scope>\tfilter.<name>.clean <command>"), for the local and worktree scopes.
+fn repository_scoped_drivers(config: &str) -> Vec<String> {
+    let mut drivers: Vec<String> = config
+        .lines()
+        .filter_map(|line| {
+            let (scope, rest) = line.split_once('\t')?;
+            if scope != "local" && scope != "worktree" {
+                return None;
+            }
+            let key = rest.split_whitespace().next()?;
+            let name = key.strip_prefix("filter.")?.rsplit_once('.')?.0;
+            Some(name.to_owned())
+        })
+        .collect();
+    drivers.sort();
+    drivers.dedup();
+    drivers
 }
 
 /// Only full object ids are passed to git, so a value from the UI can never be
@@ -445,6 +513,18 @@ mod tests {
         assert!(parse_name_status(b"M\0").is_err());
         assert!(parse_name_status(b"R100\0only-old\0").is_err());
         assert!(parse_name_status(b"Q\0x\0").is_err());
+    }
+
+    #[test]
+    fn only_the_repositorys_own_filter_drivers_count() {
+        let config = "global\tfilter.lfs.clean git-lfs clean -- %f\n\
+                      system\tfilter.sys.process sys-filter\n\
+                      command\tfilter.cmd.clean cat\n\
+                      local\tfilter.evil.clean touch /tmp/x\n\
+                      local\tfilter.evil.smudge cat\n\
+                      worktree\tfilter.dotted.name.process run\n";
+        assert_eq!(repository_scoped_drivers(config), ["dotted.name", "evil"]);
+        assert!(repository_scoped_drivers("").is_empty());
     }
 
     #[test]

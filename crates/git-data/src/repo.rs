@@ -154,6 +154,11 @@ fn run_in(dir: &Path, args: &[&str]) -> Result<Vec<u8>, GitError> {
             "log.showSignature=false",
             "-c",
             "i18n.logOutputEncoding=UTF-8",
+            // A repository's own config must not make a read run a program. This
+            // blocks the fsmonitor hook; clean filters still run during `status`
+            // (see the repository-trust task in ROADMAP.md).
+            "-c",
+            "core.fsmonitor=false",
         ])
         .args(args)
         // English messages (we match on "not a git repository"), no prompts, and no

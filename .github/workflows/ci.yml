@@ -51,7 +51,20 @@ jobs:
       # Only git-data is built: it has no Tauri dependency, so no webkit packages are needed.
       - run: cargo fmt --all --check
       - run: cargo clippy -p git-data --all-targets --locked -- -D warnings
+      # ts-rs never deletes files: start empty so a binding without a type shows up.
+      - run: rm -f src/git/bindings/*.ts
       - run: git --version && cargo test -p git-data --locked
+      # The tests regenerate src/git/bindings (ts-rs); the script regenerates the fixture JSON.
+      - name: Generated files are up to date
+        run: |
+          scripts/update-fixture.sh
+          changed=$(git status --porcelain -- src/git/bindings fixtures)
+          if [ -n "$changed" ]; then
+            echo "Regenerate and commit: cargo test -p git-data && scripts/update-fixture.sh"
+            echo "$changed"
+            git diff -- src/git/bindings fixtures
+            exit 1
+          fi
       # The workspace rust-version (1.90) is set by Tauri's dependencies, which CI does not
       # build; this keeps git-data itself within that floor.
       - name: Test git-data on Rust 1.90 (workspace rust-version)

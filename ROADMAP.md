@@ -54,7 +54,7 @@ Probes (how each task is verified):
   - `commit_files(repo, sha)`: changed files of one commit (first parent; root commit vs empty tree). `range_files(repo, shas)` for a multi-selection.
   - Probe: logic (fixture repo: README.md modified, notes.txt untracked, 1 stash).
 
-- [ ] **Tauri commands, TS types, data adapters**
+- [x] **Tauri commands, TS types, data adapters**
   - Tauri commands for every `git-data` reader. Shared TS types.
   - Adapter interface in `src/`; Tauri adapter; fixture adapter that loads `fixtures/demo-repo.json`.
   - A dump tool (`cargo run -p git-data --bin dump -- <repo>`) writes that JSON; a script rebuilds the demo repo and regenerates the JSON.
@@ -90,6 +90,8 @@ Probes (how each task is verified):
 
 - [ ] **Ref labels column** (§1 Ref labels)
   - Pills in the lane color with a connector line to the node; laptop / cloud / both / tag icons; `✓` on the checked-out branch; `+N` badge for extra refs; truncation with `…` and the full name on hover.
+  - A ref whose commit is missing from the log (refs and log are separate reads) is skipped, not an error.
+  - The demo fixture has no upstreams, annotated tags, renames or detached HEAD: extend `scripts/update-fixture.sh` (or add a second fixture) to cover them in the browser.
   - Probe: ui.
 
 - [ ] **WIP and stash rows** (§1 Special rows)
@@ -165,7 +167,13 @@ Probes (how each task is verified):
 
 - [ ] **Performance on large repos**
   - Synthetic repo with 100 000 commits: initial load and layout time measured and recorded in the README; scrolling stays smooth. Move layout to a Web Worker if the main thread blocks.
+  - Baseline from the Tauri task (debug build, one `graph_data` call, measured by the frontend): 100 000 commits load in about 2.0 s (1.85–2.13 s over 3 runs); the 19-commit demo repo in about 210 ms, mostly process starts (about 12 git runs, and `Repo::open` runs twice). Candidates: cache the open `Repo`, page or stream the log, a compact encoding.
   - Probe: logic (benchmark) + app.
+
+- [ ] **Repository trust**
+  - A repository's own `.git/config` can make reads run programs. Since the Tauri task: `core.fsmonitor` is forced off; `status()` is skipped (with a reason) when the repository's local/worktree config defines filter drivers; submodule work trees are not read (`--ignore-submodules=dirty`), so no git runs inside a submodule.
+  - Add the trust prompt: ask before reading the working tree of a repository whose config defines filters (remember the answer per repository); trusted repositories get full status, including uncommitted changes inside submodules. Look for other config that can run programs during the reads we do (for example `log.showSignature` → `gpg.program`, already forced off).
+  - Probe: logic (a repository whose config sets a clean filter that writes a marker file: no marker before trust).
 
 ## Deferred (not in this roadmap)
 

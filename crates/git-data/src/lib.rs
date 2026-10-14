@@ -10,6 +10,7 @@
 
 mod changes;
 mod error;
+mod graph;
 mod log;
 mod refs;
 mod repo;
@@ -17,7 +18,8 @@ mod stash;
 mod version;
 
 pub use changes::{ChangeKind, FileChange, WorkingTreeStatus};
-pub use error::GitError;
+pub use error::{ErrorInfo, ErrorKind, GitError};
+pub use graph::{Fixture, GraphData, RepoInfo, range_key};
 pub use log::Commit;
 pub use refs::{Head, Ref, RefKind, RepoRefs};
 pub use repo::Repo;

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "outDir": "node_modules/.tmp/tsconfig.test",
+    // Tests run in Node (some read files).
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "fixtures/*.json"],
+  "exclude": [],
+  "references": [{ "path": "./tsconfig.app.json" }]
+}

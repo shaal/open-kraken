@@ -412,3 +412,97 @@ fn range_edges_empty_selection_and_unrelated_histories() {
     let reversed = repo.range_files(&[&z, &a]).unwrap();
     assert_eq!(files, reversed);
 }
+
+/// Spec §2/§4: the 9-commit Shift+click range shows 4 added files and 1 modified.
+#[test]
+fn nine_commit_shift_click_range_matches_the_observed_file_list() {
+    let (_tmp, path, _) = fixture();
+    let repo = Repo::open(&path).unwrap();
+    let validate = sha_of(&path, ":/Validate email field");
+    let range = git(
+        &path,
+        &["rev-list", "main", "--not", &format!("{validate}^@")],
+    );
+    let shas: Vec<&str> = range.lines().collect();
+    assert_eq!(shas.len(), 9);
+    let files = repo.range_files(&shas).unwrap();
+    let mut summary: Vec<String> = files
+        .iter()
+        .map(|f| format!("{:?} {}", f.kind, f.path))
+        .collect();
+    summary.sort();
+    assert_eq!(
+        summary,
+        [
+            "Added CHANGELOG.md",
+            "Added api.js",
+            "Added docs.md",
+            "Added login.js",
+            "Modified README.md"
+        ]
+    );
+}
+
+/// Writes a filter program that leaves a marker file when it runs.
+fn marker_filter(dir: &std::path::Path) -> (std::path::PathBuf, String) {
+    let marker = dir.join("filter-ran");
+    let script = dir.join("filter.sh");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\ntouch '{}'\ncat\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    (marker, script.display().to_string())
+}
+
+#[test]
+fn a_repository_defining_its_own_filters_is_not_status_read() {
+    let (tmp, path, _) = fixture();
+    let (marker, script) = marker_filter(tmp.path());
+    git(&path, &["config", "filter.evil.clean", &script]);
+    std::fs::write(path.join(".gitattributes"), "* filter=evil\n").unwrap();
+    std::fs::write(path.join("docs.md"), "touched").unwrap();
+    let graph = Repo::open(&path).unwrap().graph_data().unwrap();
+    assert!(!marker.exists(), "the repository's filter ran");
+    let reason = graph.status.skipped.clone().expect("status skipped");
+    assert!(reason.contains("evil"), "{reason}");
+    assert!(graph.status.is_clean());
+    assert_eq!(graph.log.len(), 19, "history is still read");
+}
+
+#[test]
+fn submodule_work_trees_are_not_read() {
+    let (tmp, path) = new_repo();
+    let sub_src = tmp.path().join("sub-src");
+    std::fs::create_dir(&sub_src).unwrap();
+    git(&sub_src, &["init", "-q", "-b", "main"]);
+    commit_file(&sub_src, "s.txt", "one");
+    commit_file(&path, "top.txt", "top");
+    let url = format!("file://{}", sub_src.display());
+    git(
+        &path,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            &url,
+            "sub",
+        ],
+    );
+    git(&path, &["commit", "-q", "-m", "add submodule"]);
+    let sub = path.join("sub");
+    let (marker, script) = marker_filter(tmp.path());
+    git(&sub, &["config", "filter.evil.clean", &script]);
+    std::fs::write(sub.join(".gitattributes"), "* filter=evil\n").unwrap();
+    std::fs::write(sub.join("s.txt"), "edited inside the submodule").unwrap();
+    let status = Repo::open(&path).unwrap().status().unwrap();
+    assert!(!marker.exists(), "a filter inside the submodule ran");
+    assert_eq!(status.skipped, None);
+    assert!(
+        status.is_clean(),
+        "uncommitted edits inside a submodule are not read"
+    );
+}

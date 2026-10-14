@@ -3,6 +3,9 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use serde::Serialize;
+use ts_rs::TS;
+
 /// Why a repository could not be read.
 #[derive(Debug)]
 pub enum GitError {
@@ -64,5 +67,84 @@ impl std::error::Error for GitError {
             Self::GitNotStarted(err) => Some(err),
             _ => None,
         }
+    }
+}
+
+/// What kind of error happened, for the UI to switch on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ErrorKind {
+    GitNotStarted,
+    PathNotFound,
+    NotARepository,
+    NotRepositoryRoot,
+    InvalidArgument,
+    CommandFailed,
+    UnexpectedOutput,
+    /// A failure outside git (for example a crashed background task).
+    Internal,
+}
+
+/// An error as the UI receives it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ErrorInfo {
+    pub kind: ErrorKind,
+    /// A sentence for people.
+    pub message: String,
+    /// The path the error is about, when there is one.
+    pub path: Option<String>,
+    /// For `notRepositoryRoot`: the repository root to open instead.
+    pub root: Option<String>,
+}
+
+impl ErrorInfo {
+    /// An error that did not come from git.
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self {
+            kind: ErrorKind::Internal,
+            message: message.into(),
+            path: None,
+            root: None,
+        }
+    }
+}
+
+impl GitError {
+    pub fn kind(&self) -> ErrorKind {
+        match self {
+            Self::GitNotStarted(_) => ErrorKind::GitNotStarted,
+            Self::PathNotFound(_) => ErrorKind::PathNotFound,
+            Self::NotARepository(_) => ErrorKind::NotARepository,
+            Self::NotRepositoryRoot { .. } => ErrorKind::NotRepositoryRoot,
+            Self::InvalidArgument(_) => ErrorKind::InvalidArgument,
+            Self::CommandFailed { .. } => ErrorKind::CommandFailed,
+            Self::UnexpectedOutput { .. } => ErrorKind::UnexpectedOutput,
+        }
+    }
+}
+
+impl From<&GitError> for ErrorInfo {
+    fn from(err: &GitError) -> Self {
+        let display = |p: &std::path::Path| Some(p.to_string_lossy().into_owned());
+        let (path, root) = match err {
+            GitError::PathNotFound(p) | GitError::NotARepository(p) => (display(p), None),
+            GitError::NotRepositoryRoot { path, root } => (display(path), display(root)),
+            _ => (None, None),
+        };
+        Self {
+            kind: err.kind(),
+            message: err.to_string(),
+            path,
+            root,
+        }
+    }
+}
+
+impl From<GitError> for ErrorInfo {
+    fn from(err: GitError) -> Self {
+        Self::from(&err)
     }
 }

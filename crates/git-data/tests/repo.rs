@@ -561,3 +561,16 @@ fn worktree_edge_cases_never_open_an_admin_directory() {
         assert!(result.is_err(), "{p:?} opened: {result:?}");
     }
 }
+
+#[test]
+fn a_repository_config_cannot_run_fsmonitor_during_reads() {
+    let (tmp, path, _) = fixture();
+    let marker = tmp.path().join("fsmonitor-ran");
+    let hook = tmp.path().join("hook.sh");
+    std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+    std::fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    git(&path, &["config", "core.fsmonitor", hook.to_str().unwrap()]);
+    let repo = Repo::open(&path).unwrap();
+    repo.graph_data().unwrap();
+    assert!(!marker.exists(), "core.fsmonitor ran a program");
+}
