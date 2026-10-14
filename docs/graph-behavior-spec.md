@@ -50,6 +50,8 @@ In menu labels, `{current}` is the checked-out branch, `{ref}` the clicked branc
 - Edges are **orthogonal with rounded elbows**: vertical in a lane, horizontal across lanes, with a rounded 90° corner. No diagonals.
 - Fork: from the parent node, go right, then turn up into the child lane.
 - Merge: from the merge dot, go right, then turn down into the merged lane.
+- When the target lane is on the left, the elbow goes left instead (for example when `main` is merged into a feature branch). `[choice]`
+- An elbow's horizontal run may cross other lanes' lines: in the demo repo the release merge and the release fork both cross lane 1. `[obs]`
 - Each row has a translucent "streak" in the lane color between the node and the message column.
 - The message cell has a thin vertical bar on its left edge, in the commit's lane color.
 
@@ -371,16 +373,16 @@ Copied from the in-app Keyboard Shortcuts panel. Only ↑/↓ were tested; the o
 
 ## 6. Layout algorithm `[choice]`
 
-Implement from the prose description in Pierre Vigier, "Commit graph drawing algorithms" (2019). Do not copy gitamine code (GPL-3.0).
+Rows follow the prose description in Pierre Vigier, "Commit graph drawing algorithms" (2019). Lanes reserve a merged parent's lane at the merge (as `git log --graph` does) instead of Vigier's forbidden columns, because that reproduces the lanes GitKraken showed for the demo repo (Vigier's rule swaps two rows of it). Do not copy gitamine code (GPL-3.0).
 
 1. **Rows:** a temporal topological sort. Depth-first topological order, started from commits sorted newest-first by committer date. Every parent sits below its children, even with clock skew. Equal dates are ordered by sha, so the result never depends on the input order; the history still wins over that tie-break (a child is always above its parent). With skew, the newest commit is placed as high as it can go: directly below its skewed children. When the dates agree with the history, the result is plain newest-first date order, which is the order GitKraken showed for the demo repo. Implemented in `src/graph/rowOrder.ts`.
 2. **Child kinds:** a child whose first parent is the commit is a *branch child*; any other child is a *merge child*.
-3. **Columns:** scan rows top to bottom with a list of active lanes.
-   - Forbidden columns: any lane that is occupied between this row and the row of the topmost merge child.
-   - If a branch child holds a lane that is not forbidden, take over that lane.
-   - Else take the first empty slot, or append a new lane.
-   - Clear (do not remove) the slots of other branch children. Lanes never shift, so branches stay straight.
-4. **Edges:** a branch-child edge stays in its lane. A merge-child edge needs a clear path, which the forbidden-column rule makes sure of. Draw it orthogonally with rounded elbows (section 1).
+3. **Columns:** scan rows top to bottom. Each lane is empty or *waits* for one commit below.
+   - A commit's own lane waits for its first parent, so a branch is a straight line.
+   - At a merge, each other parent gets a lane at once: a lane already waiting for that parent (the edges join), else the first empty lane other than the merge's own, else a new lane. (A merge whose first parent is missing keeps its own lane empty, so nothing runs straight down from it.)
+   - A commit takes the leftmost lane waiting for it as a first parent (a branch child's lane); else a lane waiting for it as a merged parent; else the first empty lane, else a new lane. The other lanes waiting for it end at it.
+   - Lanes are emptied, never removed, so lane numbers never shift. A waiting lane belongs to one commit, so no edge passes through another node.
+4. **Edges:** an edge runs from the child's row to the parent's row in one lane. It leaves the child straight down when it runs in the child's lane, else with an elbow (merge: across, then down); it reaches the parent straight when it runs in the parent's lane, else with an elbow (fork: across from the parent, then up). Each lane has one color (`lane % 8`); an elbow takes the color of the lane the edge runs in. Implemented in `src/graph/lanes.ts`; the demo repo comes out in GitKraken's lanes (main 0; graph-view and login 1; release and bugfix 2). Guarantees: no edge passes through another node; two edges share a lane only when they lead to the same commit (they join); a node's straight-down line is always its first parent (a missing first parent leaves it empty); a commit with no parents and no children in the list has no line at all; a first-parent link bends only at a fork, where every branch but the leftmost ends with an elbow.
 
 Apache-2.0 code reference, if needed: `dolthub/commit-graph`.
 

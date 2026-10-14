@@ -70,10 +70,10 @@ Probes (how each task is verified):
   - Properties: every parent row is below all its children; result is deterministic for any input order; equals committer-date order when that order is already valid; clock skew handled.
   - Probe: logic (Vitest + fast-check property tests; the fixture repo order).
 
-- [ ] **Layout: lanes, edges, colors** (§6.2–6.4, §1 Edges)
-  - Pure TS. Branch children vs merge children; forbidden columns; take over a branch child's lane, else first empty slot, else append; clear (never remove) slots.
+- [x] **Layout: lanes, edges, colors** (§6.2–6.4, §1 Edges)
+  - Pure TS. Lanes wait for a commit: a commit's lane waits for its first parent; a merge reserves (or joins) a lane for each other parent; a commit takes the leftmost lane waiting for it as a first parent, else as a merged parent, else the first empty slot, else appends; slots are cleared, never removed. (Chosen over Vigier's forbidden columns: it reproduces GitKraken's demo-repo lanes.)
   - Output per row: node lane, pass-through lanes, and edge segments (vertical, fork elbow, merge elbow) with lane colors.
-  - Properties: no edge passes through another node; a branch's first-parent chain stays in one lane; lanes never shift.
+  - Properties: no edge passes through another node; a first-parent link stays in its lane except at a fork (only the leftmost branch continues); lanes never shift.
   - Probe: logic (property tests on random DAGs; fixture snapshot).
 
 ## Graph view
