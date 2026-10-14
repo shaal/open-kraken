@@ -3,7 +3,7 @@
 Target behavior for the open-kraken commit graph, modeled on GitKraken Desktop.
 Observed on GitKraken Desktop **12.6.0** (2026-10-14) with a synthetic demo repo
 (5 branches, 2 merges, 2 tags, 1 stash, a remote, uncommitted changes).
-Rebuild that repo with `docs/fixtures/make-demo-repo.sh <repo-dir> <origin-dir>`. Use it to compare open-kraken against this spec.
+Rebuild that repo with `docs/fixtures/make-demo-repo.sh <repo-dir> <origin-dir>` (two new directories; their parents must exist). It gives the same SHAs on every run and platform; `docs/fixtures/verify-demo-repo.sh` checks that. Use it to compare open-kraken against this spec.
 
 ## Source policy (clean room)
 

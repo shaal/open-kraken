@@ -18,7 +18,7 @@ Probes (how each task is verified):
 
 ## Foundation
 
-- [ ] **Fixture script: portable and deterministic**
+- [x] **Fixture script: portable and deterministic**
   - Port `docs/fixtures/make-demo-repo.sh` from zsh to bash (Ubuntu CI has no zsh).
   - Set `GIT_AUTHOR_*` and `GIT_COMMITTER_*` (name, email, date) for every git call, including `git stash push`.
   - Ignore the user's git config (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_SYSTEM=/dev/null`) so hooks, signing and templates cannot change the result.
@@ -33,7 +33,7 @@ Probes (how each task is verified):
   - Probe: logic + app (one window screenshot).
 
 - [ ] **CI on pull requests**
-  - GitHub Actions on `ubuntu-latest`: pnpm install (frozen lockfile), typecheck, lint, Vitest; `cargo fmt --check`, `cargo clippy -p git-data`, `cargo test -p git-data`.
+  - GitHub Actions on `ubuntu-latest`: pnpm install (frozen lockfile), typecheck, lint, Vitest; `cargo fmt --check`, `cargo clippy -p git-data`, `cargo test -p git-data`; `docs/fixtures/verify-demo-repo.sh`.
   - Do not build the Tauri app in CI (needs webkit packages); `git-data` must build without them.
   - Acceptance: the workflow runs green on this task's own PR.
   - Probe: the PR's check run.
