@@ -27,6 +27,8 @@ Status: early development. The app opens a window with a placeholder page. The p
 | `cargo clippy --workspace --all-targets -- -D warnings` | Lint the Rust code. |
 | `docs/fixtures/verify-demo-repo.sh` | Check the demo repo fixture builds the same SHAs everywhere. |
 
+CI (`.github/workflows/ci.yml`) runs the frontend checks, the git-data checks (also on Rust 1.90), the fixture check and actionlint on every pull request and on `main`.
+
 ## Layout
 
 - `src/`: React frontend.

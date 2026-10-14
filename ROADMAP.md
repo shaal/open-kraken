@@ -32,7 +32,7 @@ Probes (how each task is verified):
   - Acceptance: `pnpm tauri dev` opens a window titled "open-kraken".
   - Probe: logic + app (one window screenshot).
 
-- [ ] **CI on pull requests**
+- [x] **CI on pull requests**
   - GitHub Actions on `ubuntu-latest`: pnpm install (frozen lockfile), typecheck, lint, Vitest; `cargo fmt --check`, `cargo clippy -p git-data`, `cargo test -p git-data`; `docs/fixtures/verify-demo-repo.sh`.
   - Do not build the Tauri app in CI (needs webkit packages); `git-data` must build without them.
   - Acceptance: the workflow runs green on this task's own PR.
