@@ -373,7 +373,7 @@ Copied from the in-app Keyboard Shortcuts panel. Only ↑/↓ were tested; the o
 
 Implement from the prose description in Pierre Vigier, "Commit graph drawing algorithms" (2019). Do not copy gitamine code (GPL-3.0).
 
-1. **Rows:** a temporal topological sort. Depth-first topological order, started from commits sorted newest-first by committer date. Every parent sits below its children, even with clock skew.
+1. **Rows:** a temporal topological sort. Depth-first topological order, started from commits sorted newest-first by committer date. Every parent sits below its children, even with clock skew. Equal dates are ordered by sha, so the result never depends on the input order; the history still wins over that tie-break (a child is always above its parent). With skew, the newest commit is placed as high as it can go: directly below its skewed children. When the dates agree with the history, the result is plain newest-first date order, which is the order GitKraken showed for the demo repo. Implemented in `src/graph/rowOrder.ts`.
 2. **Child kinds:** a child whose first parent is the commit is a *branch child*; any other child is a *merge child*.
 3. **Columns:** scan rows top to bottom with a list of active lanes.
    - Forbidden columns: any lane that is occupied between this row and the row of the topmost merge child.

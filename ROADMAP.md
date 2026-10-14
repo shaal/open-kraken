@@ -65,7 +65,7 @@ Probes (how each task is verified):
 
 ## Layout
 
-- [ ] **Layout: row order** (§6.1)
+- [x] **Layout: row order** (§6.1)
   - Pure TS. Temporal topological sort: depth-first, started from commits sorted newest-first by committer date.
   - Properties: every parent row is below all its children; result is deterministic for any input order; equals committer-date order when that order is already valid; clock skew handled.
   - Probe: logic (Vitest + fast-check property tests; the fixture repo order).
