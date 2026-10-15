@@ -88,20 +88,26 @@ Probes (how each task is verified):
   - Open: headless WebKit sometimes stops responding during long fast wheel scrolling (its content process then sleeps at 0 % CPU, so this is not a script loop). Over 5 interleaved rounds it stopped for the app 2 times, a static text list with no script 2 times, a hand-written list 1 time and an empty scroller 0 times (the app also stopped in 3 earlier runs). So it follows text painting in this environment (an older WebKit build on a newer macOS, screen locked), not our code. Check in the Tauri window (WKWebView), which is not measured yet.
   - Open: in some early runs, the first wheel run had one late frame of 44–167 ms. It did not come back in later runs from a new browser, with long-frame attribution on.
 
-- [ ] **Graph lanes rendering** (§1 Nodes, Edges and lanes)
-  - Per-row SVG: lane lines, orthogonal edges with rounded 90° elbows, node avatar circle with lane-colored ring (identicon from the email hash, no network requests), merge commits as small solid dots.
+- [x] **Graph lanes rendering** (§1 Nodes, Edges and lanes)
+  - Per-row slices (SVG at first; now one canvas for the rows in the DOM, see below): lane lines, orthogonal edges with rounded 90° elbows, node avatar circle with lane-colored ring (identicon from the email hash, no network requests), merge commits as small solid dots.
   - Row streak in the lane color between node and message; thin lane-colored bar at the left of the message cell.
   - Probe: ui (screenshot of the fixture graph; DOM checks for node kinds).
+  - Done. `traceSegment` (geometry.ts) traces lines and rounded elbows (`arcTo`); `drawGraphRows` draws the rows in the DOM on one canvas (`GraphCanvas`), lines first in palette order, then the nodes; identicons are our own 5 × 5 mirrored pattern from an FNV-1a hash of the email, with cell edges on device pixels at pixel ratios of 1 and above (at ratios such as 1.25 the cells alternate by one device pixel in size); the streak and the message bar are CSS per row. The demo repo matches GitKraken's lanes and elbows (our screenshot compared with `~/Desktop/gk-shots/03-demo-tab.png`, taken while using GitKraken normally: main 0, graph-view and login 1, release and bugfix 2; merges across then down, forks across then up; 2 merge dots, 17 avatars, 6 elbows). Rows carry `data-node-kind` and the Graph cell an `aria-label` ("Merge commit" / "Commit").
+  - Why a canvas: an SVG per row was built first (that build was replaced and is not kept in the tree). `scripts/perf/scroll-bench.js` as committed here, production build, headless Chrome, 50 000 commits, both builds run in turn: at 140 px per wheel event both had 0–2 late frames per 300; at 2800 px per event with the CPU 4× slower, the SVG build had 76–80 late frames and 8.5–8.7 ms of main-thread work per frame, the canvas build 4 and 4.5–5 ms. The canvas build across 9 runs at full speed (one by a reviewer): 0–1 late frames per 300, no blank rows, 0.8–2.5 ms per frame, the same as the table task's baseline; with the CPU 4× slower, 0–2 late frames at 140 px and 0–4 at 2800 px per event.
+  - Open: the 22nd lane and beyond do not fit the 480 px maximum of the Graph column and are cut off (with 16 px lanes, 29 lanes fitted). The column header task (column resizing) owns the fix; a horizontal scroll or narrower lanes past a limit are options.
+  - Device pixel ratio: a page loaded at ratio 2 (Chrome emulation) gets a 2× canvas and draws sharp lines and faces (screenshot checked). The bitmap is a whole number of device pixels and its CSS box is sized to match. A resize re-renders at the current ratio at once, also when going back to an earlier ratio (seen in Chrome emulation). Every render reads the current ratio, so a scroll after a change draws at the new one (seen in Chrome emulation at ratios from 1 to 3). Open: when only the ratio changes, Chrome's headless emulation sends no resize, media query or ResizeObserver signal, so the canvas keeps the old ratio until the next render; check a real display change in the Tauri window.
 
 - [ ] **Ref labels column** (§1 Ref labels)
   - Pills in the lane color with a connector line to the node; laptop / cloud / both / tag icons; `✓` on the checked-out branch; `+N` badge for extra refs; truncation with `…` and the full name on hover.
   - A ref whose commit is missing from the log (refs and log are separate reads) is skipped, not an error.
+  - The graph canvas covers only the Graph column and paints above the rows: draw a connector in the Branch / Tag cell up to the column edge and on the canvas from the edge to the node, and keep an expanded label above the canvas.
   - The demo fixture has no upstreams, annotated tags, renames or detached HEAD: extend `scripts/update-fixture.sh` (or add a second fixture) to cover them in the browser.
   - Probe: ui.
 
 - [ ] **WIP and stash rows** (§1 Special rows)
   - WIP row at the top only when the tree is dirty: dashed hollow node, message cell placeholder `// WIP`, change counts.
   - Stash rows: dotted square node, dotted connector to the base commit.
+  - Draw these nodes and connectors in `drawGraphRows`; its `GraphContext` needs `setLineDash` for dashed and dotted strokes.
   - Probe: ui (fixture has both).
 
 ## Interaction

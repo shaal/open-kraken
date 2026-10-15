@@ -164,6 +164,29 @@ body {
   contain: strict;
 }
 
+/* The lanes and nodes are drawn on one canvas over the Graph cells (GraphCanvas).
+   Each cell draws its row's streak: from the node to the message column, in the
+   node's lane color. */
+.commit-row > .commit-lanes {
+  height: 100%;
+  padding: 0;
+  background: linear-gradient(var(--streak-color), var(--streak-color)) no-repeat var(--node-x)
+    3px / calc(100% - var(--node-x)) 22px;
+}
+
+.commit-graph-canvas {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* A thin bar in the node's lane color at the left of the message (spec §1). */
+.commit-row > .commit-message {
+  height: 100%;
+  border-left: 3px solid var(--lane-color);
+  line-height: 28px;
+  box-sizing: border-box;
+}
+
 .commit-row:hover {
   background-color: #23262c;
 }

@@ -1,8 +1,16 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useRef } from "react";
+import { memo, useRef, type CSSProperties } from "react";
 import type { Commit } from "../git/bindings/Commit";
-import { BRANCH_COLUMN_WIDTH, graphColumnWidth, ROW_HEIGHT } from "./geometry";
+import {
+  BRANCH_COLUMN_WIDTH,
+  graphColumnWidth,
+  isMergeCommit,
+  laneX,
+  ROW_HEIGHT,
+} from "./geometry";
+import { GraphCanvas } from "./GraphCanvas";
 import type { GraphLayout } from "./lanes";
+import { laneColorValue, laneStreakColor } from "./palette";
 
 /**
  * Rows rendered above and below the visible ones. They fill the view while a
@@ -35,7 +43,11 @@ export function CommitGraph({ layout }: CommitGraphProps) {
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
   });
-  const columns = `${BRANCH_COLUMN_WIDTH}px ${graphColumnWidth(layout.laneCount)}px minmax(0, 1fr)`;
+  const graphWidth = graphColumnWidth(layout.laneCount);
+  const items = virtualizer.getVirtualItems();
+  const firstItem = items[0];
+  const lastItem = items.at(-1);
+  const columns = `${BRANCH_COLUMN_WIDTH}px ${graphWidth}px minmax(0, 1fr)`;
 
   return (
     <div className="commit-graph">
@@ -66,19 +78,29 @@ export function CommitGraph({ layout }: CommitGraphProps) {
           data-testid="commit-graph-body"
         >
           <div className="commit-graph-rows" style={{ height: virtualizer.getTotalSize() }}>
-            {virtualizer.getVirtualItems().map((item) => {
+            {items.map((item) => {
               const row = rows[item.index];
               if (!row) return null;
               return (
                 <CommitRow
                   key={row.commit.sha}
-                  commit={row.commit}
+                  layout={layout}
                   index={item.index}
                   top={item.start}
                   columns={columns}
                 />
               );
             })}
+            {firstItem && lastItem && (
+              <GraphCanvas
+                layout={layout}
+                first={firstItem.index}
+                last={lastItem.index}
+                top={firstItem.start}
+                left={BRANCH_COLUMN_WIDTH}
+                width={graphWidth}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -99,7 +121,8 @@ export function CommitGraph({ layout }: CommitGraphProps) {
 }
 
 interface CommitRowProps {
-  commit: Commit;
+  /** The whole layout (a stable object), so the memo below holds while scrolling. */
+  layout: GraphLayout<Commit>;
   index: number;
   /** Pixels from the top of the scroll area. */
   top: number;
@@ -107,23 +130,38 @@ interface CommitRowProps {
 }
 
 /** One commit row. Memoized: while scrolling, only rows that come into view render. */
-const CommitRow = memo(function CommitRow({ commit, index, top, columns }: CommitRowProps) {
+const CommitRow = memo(function CommitRow({ layout, index, top, columns }: CommitRowProps) {
+  const row = layout.rows[index];
+  if (!row) return null;
+  const style = {
+    gridTemplateColumns: columns,
+    height: ROW_HEIGHT,
+    transform: `translateY(${top}px)`,
+    // The streak and the message cell's bar (spec §1 Edges and lanes) take the
+    // node's lane color; the streak starts at the node.
+    "--lane-color": laneColorValue(row.lane),
+    "--streak-color": laneStreakColor(row.lane),
+    "--node-x": `${laneX(row.lane)}px`,
+  } as CSSProperties;
   return (
     <div
       className="commit-row"
       role="row"
       aria-rowindex={index + 2}
       data-row-index={index}
-      style={{
-        gridTemplateColumns: columns,
-        height: ROW_HEIGHT,
-        transform: `translateY(${top}px)`,
-      }}
+      data-lane={row.lane}
+      data-node-kind={isMergeCommit(row.commit) ? "merge" : "commit"}
+      style={style}
     >
       <div role="cell" className="commit-refs" />
-      <div role="cell" className="commit-lanes" />
-      <div role="cell" className="commit-message" title={commit.subject}>
-        {commit.subject}
+      {/* Drawn by GraphCanvas, over this cell; the label names the node for screen readers. */}
+      <div
+        role="cell"
+        className="commit-lanes"
+        aria-label={isMergeCommit(row.commit) ? "Merge commit" : "Commit"}
+      />
+      <div role="cell" className="commit-message" title={row.commit.subject}>
+        {row.commit.subject}
       </div>
     </div>
   );

@@ -389,7 +389,7 @@ Apache-2.0 code reference, if needed: `dolthub/commit-graph`.
 ## 7. Rendering and state `[choice]`
 
 - Virtualize rows (`@tanstack/react-virtual` or `react-window`, both MIT).
-- Draw each row's lane segments, node, and elbows as one SVG slice. Each row then renders by itself.
+- Draw the lane segments, nodes and elbows of the rows in the DOM on one canvas that sits in the scrolling content (so it moves with the rows), and redraw it in the same frame as the rows. The streak and the message bar are CSS on each row. An SVG per row was measured first and was slower; the numbers are in ROADMAP.md, "Graph lanes rendering".
 - Selection = a set of SHAs plus an anchor SHA.
   - Shift+click: order the two ends by row. The selection is `rev-list newer --not older^@`.
   - Cmd+click: toggle one SHA.

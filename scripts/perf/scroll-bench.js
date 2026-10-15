@@ -11,8 +11,8 @@
 // - the time since the previous frame (performance.now(); the rAF timestamp
 //   hides stalls in headless Chrome). A gap of 1.5 frame periods or more is a
 //   late frame; the period is the median gap while idle.
-// - whether every visible row is in the DOM (main-thread state at the frame;
-//   the pixels themselves are not sampled).
+// - whether every visible row is in the DOM, and covered by the graph canvas
+//   (main-thread state at the frame; the pixels themselves are not sampled).
 // - long-animation-frame entries (50 ms or more) with what ran in them.
 // It also reports the main-thread time per frame (Performance.getMetrics).
 //
@@ -99,12 +99,16 @@ async function recordFrames({ durationMs, selfTest }) {
         rowCount - 1,
         Math.floor((top + body.clientHeight - 1) / rowHeight),
       );
-      for (let i = first; i <= lastVisible; i++) {
-        if (!rendered.has(i)) {
-          blankFrames += 1;
-          break;
-        }
+      // The graph canvas, when there is one, must cover the visible rows too.
+      const canvas = document.querySelector("canvas.commit-graph-canvas");
+      const graphCovered =
+        !canvas ||
+        (Number(canvas.dataset.firstRow) <= first && Number(canvas.dataset.lastRow) >= lastVisible);
+      let blank = !graphCovered;
+      for (let i = first; i <= lastVisible && !blank; i++) {
+        if (!rendered.has(i)) blank = true;
       }
+      if (blank) blankFrames += 1;
       if (now - start < durationMs) requestAnimationFrame(tick);
       else resolve();
     };
