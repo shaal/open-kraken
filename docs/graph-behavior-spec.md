@@ -57,11 +57,21 @@ In menu labels, `{current}` is the checked-out branch, `{ref}` the clicked branc
 
 ### Ref labels (Branch / Tag column)
 
-- A pill in the lane color, joined to its node by a thin horizontal line.
+- A pill in the lane color, joined to its node by a thin horizontal line. The pill and the line of the checked-out commit are brighter. `[obs]`
 - Icons in the pill: a laptop for a local branch, a cloud for a remote branch, both when local and remote point to the same commit, and a tag icon for a tag. `✓` marks the checked-out branch.
-- Several refs on one commit: one pill plus a `+N` badge.
+- A local branch and a remote branch with the same name (`x` and `origin/x`) on one commit share one pill with both icons. `[obs]` The demo repo sets no upstreams, so the match is probably by name (an inference, implemented as a `[choice]` below).
+- A remote branch without such a local branch shows its name without the remote: `origin/main` reads "main" with a cloud. `[obs]`
+- Several refs on one commit: one pill plus a `+N` badge. `+N` counts pills, not refs: a local branch with its remote counts once (observed: `bugfix/crash-on-start` with its remote had no badge; `release/1.1` with the tag `v1.1` had `+1`).
 - Long names are cut off with `…`. Hovering a pill shows the full name.
 - **Ghost label**: a selected or hovered commit with no ref shows a faded pill of its nearest containing branch.
+
+Choices for cases the demo repo does not show `[choice]`:
+- A remote branch joins a local branch at the same commit when it is that branch's upstream, even with another name, or else when it has the same name on its remote. The upstream match comes first. Each remote branch joins one local branch at most: when several branches track it, the one with its name, else the checked-out one, else the first by name.
+- A remote-only pill drops its remote unless another ref on the same commit would then read the same: `origin/x` beside `up/x`, or `origin/v1.1` beside a tag `v1.1`, stay whole.
+- Order of the refs on one commit (the first is the pill, the rest are the `+N`): a detached HEAD, the checked-out branch, other local branches, remote-only branches, tags. Each group is sorted by name, in code-unit order. Observed: `release/1.1` was shown before the tag `v1.1`.
+- A detached HEAD gets its own "HEAD" pill with `✓`. No branch gets the `✓` then, even one at the same commit. The `✓` goes to the checked-out branch only where HEAD points: refs and HEAD are separate reads and can disagree after a commit lands between them.
+- Hovering a label draws it at its full width, brighter, above the graph, but not past the right edge of the table (there it is cut off with `…`). The tooltip lists the full names (`origin/main`); the `+N` badge's tooltip lists the other refs.
+- A ref whose commit is not in the history read (refs and history are separate reads) gets no label.
 
 ## 2. Interactions
 

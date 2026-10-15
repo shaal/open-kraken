@@ -79,6 +79,10 @@ body {
 
 /* Commit table (spec §1 Table). */
 .commit-graph {
+  /* The first column's left padding, and a hovered row's background: the ref
+     label overlay copies both. */
+  --first-cell-padding: 24px;
+  --row-hover-color: #23262c;
   position: relative;
   display: flex;
   flex: 1 1 auto;
@@ -122,7 +126,7 @@ body {
 /* The first column starts where the summary text above starts. */
 .commit-graph-header > div:first-child,
 .commit-row > div:first-child {
-  padding-left: 24px;
+  padding-left: var(--first-cell-padding);
 }
 
 /* Room for the gear button over the end of the header row. */
@@ -188,7 +192,93 @@ body {
 }
 
 .commit-row:hover {
-  background-color: #23262c;
+  background-color: var(--row-hover-color);
+}
+
+/* Ref labels (spec §1 Ref labels): a pill in the lane color, a +N badge, and a
+   line to the column's right edge, where the canvas continues it to the node. */
+.commit-row > .commit-refs {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-right: 0;
+}
+
+.ref-label {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ref-pill,
+.ref-more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  /* Over --label-base, so the overlay's copy hides the label under it. */
+  background: linear-gradient(var(--label-bg), var(--label-bg)), var(--label-base, transparent);
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.ref-pill {
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ref-more {
+  padding: 0 5px;
+}
+
+.ref-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ref-icon {
+  flex: none;
+}
+
+/* Centered on the row like the canvas part of the line: 2 px at y = 13. */
+.ref-connector {
+  flex: 1 0 8px;
+  height: 2px;
+}
+
+/* The hovered label at its full width, above the canvas (CommitGraph): over the
+   label it copies, and cut off with … only where the table ends. Presses, drags
+   and text selection go through it to the row; CommitGraph keeps the hover
+   while the pointer is inside it. */
+.ref-overlay {
+  position: absolute;
+  left: var(--first-cell-padding);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - var(--first-cell-padding));
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  --label-base: var(--row-hover-color);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .icon-button {

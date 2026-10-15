@@ -4,6 +4,7 @@ import { logError } from "../log";
 import { drawGraphRows } from "./drawGraph";
 import { ROW_HEIGHT } from "./geometry";
 import type { GraphLayout } from "./lanes";
+import { NO_REF_LABELS, type RefLabels } from "./refLabels";
 
 interface GraphCanvasProps {
   layout: GraphLayout<Commit>;
@@ -15,6 +16,8 @@ interface GraphCanvasProps {
   /** Where the Graph column starts, and its width. */
   left: number;
   width: number;
+  /** Rows with ref labels get a connector from the column's left edge to the node. */
+  labels?: RefLabels;
 }
 
 let reportedNoContext = false;
@@ -24,7 +27,15 @@ let reportedNoContext = false;
  * scrolling content, so it moves with the rows. It is redrawn in the same
  * frame as the rows (a layout effect), and clicks go through it to the rows.
  */
-export function GraphCanvas({ layout, first, last, top, left, width }: GraphCanvasProps) {
+export function GraphCanvas({
+  layout,
+  first,
+  last,
+  top,
+  left,
+  width,
+  labels = NO_REF_LABELS,
+}: GraphCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const height = (last - first + 1) * ROW_HEIGHT;
   const scale = useDevicePixelRatio();
@@ -42,8 +53,8 @@ export function GraphCanvas({ layout, first, last, top, left, width }: GraphCanv
       return;
     }
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawGraphRows(ctx, layout, first, last, width, scale);
-  }, [layout, first, last, width, height, scale]);
+    drawGraphRows(ctx, layout, first, last, width, scale, labels);
+  }, [layout, first, last, width, height, scale, labels]);
   return (
     <canvas
       ref={ref}

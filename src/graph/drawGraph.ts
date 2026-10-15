@@ -21,7 +21,8 @@ import {
 } from "./geometry";
 import { IDENTICON_GRID, identicon } from "./identicon";
 import { LANE_COLOR_COUNT, laneColor, type GraphLayout, type Segment } from "./lanes";
-import { laneColorValue } from "./palette";
+import { laneColorValue, laneConnectorColor } from "./palette";
+import { NO_REF_LABELS, type RefLabels } from "./refLabels";
 
 /** The canvas calls drawing needs (a subset of CanvasRenderingContext2D). */
 export interface GraphContext extends PathSink {
@@ -56,11 +57,28 @@ export function drawGraphRows(
   last: number,
   width: number,
   scale = 1,
+  labels: RefLabels = NO_REF_LABELS,
 ): void {
   // Identicon cell edges on device pixels, so faces stay sharp. Below one
   // device pixel per CSS pixel, snapping would collapse cells, so it is skipped.
   const snap = scale >= 1 ? (v: number) => Math.round(v * scale) / scale : (v: number) => v;
   ctx.clearRect(0, 0, width, (last - first + 1) * ROW_HEIGHT);
+
+  // Ref label connectors (spec §1 Ref labels), under everything else: the
+  // Branch / Tag cell draws the line up to this column's left edge, and it
+  // continues here to the node. Not snapped: the browser draws the cell's line
+  // at its exact CSS position too, so at fractional pixel ratios both halves
+  // are smoothed alike (measured in Chrome at 1.25 and 1.5).
+  if (labels.size > 0) {
+    for (let r = first; r <= last; r++) {
+      const row = layout.rows[r];
+      const label = row && labels.get(row.commit.sha);
+      if (!row || !label) continue;
+      ctx.fillStyle = laneConnectorColor(row.lane, label.head);
+      const y = (r - first) * ROW_HEIGHT + ROW_MID - LINE_WIDTH / 2;
+      ctx.fillRect(0, y, laneX(row.lane), LINE_WIDTH);
+    }
+  }
 
   // Lines and elbows: one path per lane color, in palette order, so where two
   // colors cross, the same one is on top at every scroll position.

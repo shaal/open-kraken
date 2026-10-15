@@ -20,9 +20,10 @@ const CHANGE_KINDS: Record<ChangeKind, true> = {
 const REF_KINDS: Record<RefKind, true> = { localBranch: true, remoteBranch: true, tag: true };
 
 // Vitest runs from the repository root.
-const fixture = JSON.parse(
-  readFileSync(resolve(process.cwd(), "fixtures/demo-repo.json"), "utf8"),
-) as Fixture;
+const load = (name: string) =>
+  JSON.parse(readFileSync(resolve(process.cwd(), `fixtures/${name}.json`), "utf8")) as Fixture;
+const fixture = load("demo-repo");
+const edge = load("edge-repo");
 
 function checkFiles(files: readonly FileChange[]) {
   for (const f of files) {
@@ -32,7 +33,10 @@ function checkFiles(files: readonly FileChange[]) {
   }
 }
 
-describe("fixtures/demo-repo.json matches the generated types at run time", () => {
+describe.each([
+  ["demo-repo", fixture],
+  ["edge-repo", edge],
+])("fixtures/%s.json matches the generated types at run time", (_, fixture) => {
   it("commits", () => {
     for (const c of fixture.graph.log) {
       expect(c.sha).toMatch(/^[0-9a-f]{40}$/);
@@ -65,6 +69,49 @@ describe("fixtures/demo-repo.json matches the generated types at run time", () =
     expect(Object.keys(fixture.commitFiles).sort()).toEqual(
       fixture.graph.log.map((c) => c.sha).sort(),
     );
+    // Every stored selection is of commits in the log, so the UI can ask for it.
+    const shas = new Set(fixture.graph.log.map((c) => c.sha));
+    for (const key of Object.keys(fixture.rangeFiles)) {
+      for (const sha of key.split(",")) expect(shas.has(sha), `${sha} in ${key}`).toBe(true);
+    }
+  });
+});
+
+describe("fixtures/edge-repo.json", () => {
+  it("has the cases the demo repo lacks", () => {
+    const { refs, status } = edge.graph;
+    expect(refs.head.type).toBe("detached");
+    expect(refs.refs.filter((r) => r.upstream !== null).map((r) => r.shortName)).toEqual([
+      "feature/graph-view",
+      "feature/login",
+      "main",
+    ]);
+    expect(refs.refs.filter((r) => r.annotated).map((r) => r.shortName)).toEqual(["v1.2"]);
+    // A committed rename and a staged one.
+    const renamed = Object.values(edge.commitFiles)
+      .flat()
+      .filter((f) => f?.kind === "renamed")
+      .map((f) => `${f?.oldPath} -> ${f?.path}`);
+    expect(renamed).toEqual(["build.sh -> make.sh"]);
+    expect(status.staged).toEqual([{ path: "guide.md", oldPath: "docs.md", kind: "renamed" }]);
+    // The demo repo's commits are all still there, with the same shas.
+    const shas = new Set(edge.graph.log.map((c) => c.sha));
+    expect(fixture.graph.log.every((c) => shas.has(c.sha))).toBe(true);
+  });
+});
+
+describe("fixtures/demo-repo.json", () => {
+  it("holds the two-commit selections of §4 by their real commits", () => {
+    const sha = (subject: string) => fixture.graph.log.find((c) => c.subject === subject)?.sha;
+    const files = (a: string, b: string) => {
+      const key = [sha(a), sha(b)].sort().join(",");
+      return (fixture.rangeFiles[key] ?? []).map((f) => `${f.kind} ${f.path}`).sort();
+    };
+    expect(files("Update roadmap", "Add metrics endpoint")).toEqual(["modified README.md"]);
+    expect(files("Fix typo in docs", "Add login form")).toEqual([
+      "added docs.md",
+      "deleted login.js",
+    ]);
   });
 
   it("holds the spec's 9-commit Shift+click range with GitKraken's file list (§2, §4)", () => {

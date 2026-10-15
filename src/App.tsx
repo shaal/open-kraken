@@ -9,6 +9,7 @@ import type { RepoInfo } from "./git/bindings/RepoInfo";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { CommitGraph } from "./graph/CommitGraph";
 import { layoutGraph, type GraphLayout } from "./graph/lanes";
+import { buildRefLabels, type RefLabels } from "./graph/refLabels";
 import { logError, logInfo } from "./log";
 
 type RepoState =
@@ -21,6 +22,7 @@ type RepoState =
       info: RepoInfo;
       graph: GraphData;
       layout: GraphLayout<Commit>;
+      labels: RefLabels;
       loadMs: number;
     }
   | { phase: "error"; path: string; error: ErrorInfo };
@@ -48,9 +50,11 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
         if (request !== latestRequest.current) return;
         const layoutStarted = performance.now();
         const layout = layoutGraph(graph.log);
+        // Built once per load, so its identity is stable and rows stay memoized.
+        const labels = buildRefLabels(graph.refs, graph.log);
         const loadMs = performance.now() - started; // reading and layout
         const layoutMs = performance.now() - layoutStarted;
-        setState({ phase: "loaded", loadId: request, info, graph, layout, loadMs });
+        setState({ phase: "loaded", loadId: request, info, graph, layout, labels, loadMs });
         logInfo(
           `opened ${info.root}: ${graph.log.length} commits in ${Math.round(loadMs)} ms ` +
             `(layout ${Math.round(layoutMs)} ms)`,
@@ -122,6 +126,7 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
           info={state.info}
           graph={state.graph}
           layout={state.layout}
+          labels={state.labels}
           loadMs={state.loadMs}
           onOpenAnother={() => void chooseFolder()}
         />
@@ -147,6 +152,7 @@ interface RepoViewProps {
   info: RepoInfo;
   graph: GraphData;
   layout: GraphLayout<Commit>;
+  labels: RefLabels;
   loadMs: number;
   onOpenAnother: () => void;
 }
@@ -157,7 +163,7 @@ function RepoView(props: RepoViewProps) {
     <div className="repo-view">
       <RepoSummary {...props} />
       <ErrorBoundary action="draw the commit graph">
-        <CommitGraph layout={props.layout} />
+        <CommitGraph layout={props.layout} labels={props.labels} />
       </ErrorBoundary>
     </div>
   );

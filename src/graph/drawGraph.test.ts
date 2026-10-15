@@ -15,10 +15,16 @@ import {
 } from "./geometry";
 import { identicon } from "./identicon";
 import { layoutGraph } from "./lanes";
-import { LANE_COLORS, laneColorValue } from "./palette";
+import { LANE_COLORS, laneColorValue, laneConnectorColor } from "./palette";
+import { buildRefLabels } from "./refLabels";
 
 async function demoLayout() {
   return layoutGraph((await createFixtureAdapter().graphData("demo-repo")).log);
+}
+
+async function demoLabels() {
+  const graph = await createFixtureAdapter().graphData("demo-repo");
+  return buildRefLabels(graph.refs, graph.log);
 }
 
 /** The path calls the layout's segments should make in rows first..last, per color. */
@@ -162,6 +168,69 @@ describe("drawGraphRows", () => {
         expect(args[3]).toBeGreaterThan(0);
       }
     }
+  });
+
+  describe("ref label connectors (spec §1 Ref labels)", () => {
+    it("draws a line from the column's left edge to the node of each labeled row, under the lanes", async () => {
+      const layout = await demoLayout();
+      const labels = await demoLabels();
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 0, 18, 100, 1, labels);
+      const firstStroke = ctx.calls.findIndex((c) => c.name === "stroke");
+      const connectors = ctx.calls.slice(0, firstStroke).filter((c) => c.name === "fillRect");
+      const labeled = layout.rows
+        .map((row, r) => ({ row, r }))
+        .filter(({ row }) => labels.has(row.commit.sha));
+      expect(labeled).toHaveLength(7);
+      expect(connectors.map((c) => [c.args, c.fillStyle])).toEqual(
+        labeled.map(({ row, r }) => [
+          [0, r * ROW_HEIGHT + ROW_MID - 1, laneX(row.lane), 2],
+          laneConnectorColor(row.lane, labels.get(row.commit.sha)?.head ?? false),
+        ]),
+      );
+      // Full color only on the checked-out commit (row 0, main); half color elsewhere.
+      expect(connectors[0]?.fillStyle).toBe(laneColorValue(0));
+      expect(connectors.slice(1).every((c) => String(c.fillStyle).endsWith("80"))).toBe(true);
+      // Everything else is drawn as without labels.
+      const without = new RecordingContext();
+      drawGraphRows(without, layout, 0, 18, 100);
+      const shape = (calls: typeof ctx.calls) =>
+        calls.map((c) => [c.name, c.args, c.name === "stroke" ? c.strokeStyle : null]);
+      expect(shape(ctx.calls.filter((c) => !connectors.includes(c)))).toEqual(shape(without.calls));
+    });
+
+    it("draws the connectors of a window of rows from the top of the canvas", async () => {
+      const layout = await demoLayout();
+      const labels = await demoLabels();
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 3, 6, 100, 1, labels);
+      // Rows 3 (origin/main) and 4 (release/1.1) of 3..6 have labels.
+      const ys = ctx
+        .named("fillRect")
+        .filter((c) => c.args[0] === 0)
+        .map((c) => c.args[1]);
+      expect(ys).toEqual([ROW_MID - 1, ROW_HEIGHT + ROW_MID - 1]);
+    });
+
+    it("draws connectors where the cell's CSS line is, at every pixel ratio", async () => {
+      // The browser does not snap the cell's 2 px line at fractional ratios, so the
+      // canvas does not either: both halves then line up (checked in Chrome).
+      const layout = await demoLayout();
+      const labels = await demoLabels();
+      const at1 = new RecordingContext();
+      drawGraphRows(at1, layout, 0, 18, 100, 1, labels);
+      const expected = at1
+        .named("fillRect")
+        .filter((c) => c.args[0] === 0)
+        .map((c) => c.args);
+      expect(expected).toHaveLength(7);
+      for (const scale of [1.25, 1.5, 1.75, 2]) {
+        const ctx = new RecordingContext();
+        drawGraphRows(ctx, layout, 0, 18, 100, scale, labels);
+        const connectors = ctx.named("fillRect").filter((c) => c.args[0] === 0);
+        expect(connectors.map((c) => c.args)).toEqual(expected);
+      }
+    });
   });
 
   it("draws an elbow that goes left when the merged parent's lane is on the left", () => {

@@ -45,6 +45,30 @@ describe("defaultAdapter", () => {
     warn.mockRestore();
   });
 
+  it("serves the edge-case fixture for ?fixture=edge", async () => {
+    const { adapter } = await adapterWhen(false, "?fixture=edge");
+    expect(await adapter.initialRepoPath()).toBe("edge-repo");
+    const graph = await adapter.graphData("edge-repo");
+    expect(graph.refs.head.type).toBe("detached");
+  });
+
+  it("serves the demo fixture, with a warning, for any other fixture name", async () => {
+    for (const search of ["?fixture=nope", "?fixture=edge&fixture=edge", "?fixture="]) {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { adapter } = await adapterWhen(false, search);
+      expect(await adapter.initialRepoPath()).toBe("demo-repo");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("?fixture must be edge");
+      warn.mockRestore();
+      vi.resetModules();
+    }
+  });
+
+  it("prefers a valid synthetic count to a fixture name", async () => {
+    const { adapter } = await adapterWhen(false, "?synthetic=20&fixture=edge");
+    expect(await adapter.initialRepoPath()).toBe("synthetic-20");
+  });
+
   it("ignores the synthetic query inside the app", async () => {
     const { adapter, tauriAdapter } = await adapterWhen(true, "?synthetic=500");
     expect(adapter).toBe(tauriAdapter);

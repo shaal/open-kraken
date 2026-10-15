@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useRef, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Commit } from "../git/bindings/Commit";
 import {
   BRANCH_COLUMN_WIDTH,
@@ -10,7 +10,9 @@ import {
 } from "./geometry";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphLayout } from "./lanes";
-import { laneColorValue, laneStreakColor } from "./palette";
+import { laneColorValue, laneConnectorColor, laneStreakColor } from "./palette";
+import { RefLabelContent } from "./RefLabel";
+import { NO_REF_LABELS, type CommitLabels, type RefLabels } from "./refLabels";
 
 /**
  * Rows rendered above and below the visible ones. They fill the view while a
@@ -20,7 +22,15 @@ const OVERSCAN = 10;
 
 export interface CommitGraphProps {
   layout: GraphLayout<Commit>;
+  /** The Branch / Tag column's labels (`buildRefLabels`); none when left out. */
+  labels?: RefLabels;
 }
+
+/**
+ * Sets or clears the hovered ref label. Clearing leaves another row's hover
+ * alone, and keeps the hover while `pointer` is still on the label's expanded copy.
+ */
+type LabelHover = (sha: string, hovered: boolean, pointer?: { x: number; y: number }) => void;
 
 /**
  * The commit table (spec §1 Table): Branch / Tag, Graph and Commit message
@@ -31,11 +41,37 @@ export interface CommitGraphProps {
  * A read-only `table` for now: the selection and keyboard task makes it an
  * interactive `grid`.
  */
-export function CommitGraph({ layout }: CommitGraphProps) {
+export function CommitGraph({ layout, labels = NO_REF_LABELS }: CommitGraphProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = layout.rows;
+  // The commit whose ref label the pointer is on: its label is drawn expanded
+  // above the canvas, which a row's own content cannot be. The expanded copy
+  // takes no pointer events (presses, drags and text selection go to the row
+  // under it), so the hover lasts while the pointer is inside the copy's box.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
+  /** The pointer's last position over the table, or null when it is outside. */
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const onCopy = useCallback((x: number, y: number) => {
+    const box = copyRef.current?.getBoundingClientRect();
+    return box !== undefined && x >= box.left && x < box.right && y >= box.top && y < box.bottom;
+  }, []);
+  const onLabelHover = useCallback<LabelHover>(
+    (sha, on, pointer) => {
+      if (!on && pointer && onCopy(pointer.x, pointer.y)) return;
+      setHovered((current) => (on ? sha : current === sha ? null : current));
+    },
+    [onCopy],
+  );
+  /** Ends the hover once the pointer is off the expanded copy. */
+  const leaveCopy = (x: number, y: number) => {
+    const sha = copyRef.current?.dataset.sha;
+    // Only that copy's hover: a label entered in the meantime keeps its own.
+    if (sha && !onCopy(x, y)) setHovered((current) => (current === sha ? null : current));
+  };
   // The compiler cannot memoize this component because of the virtualizer's
-  // functions; nothing here is passed to memoized children, so that is fine.
+  // functions. That is fine: what the memoized rows get is stable by itself
+  // (the layout and labels per load, onLabelHover from useCallback).
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -48,6 +84,10 @@ export function CommitGraph({ layout }: CommitGraphProps) {
   const firstItem = items[0];
   const lastItem = items.at(-1);
   const columns = `${BRANCH_COLUMN_WIDTH}px ${graphWidth}px minmax(0, 1fr)`;
+  const hoveredItem =
+    hovered === null ? undefined : items.find((item) => rows[item.index]?.commit.sha === hovered);
+  const hoveredRow = hoveredItem && rows[hoveredItem.index];
+  const hoveredLabels = hoveredRow && labels.get(hoveredRow.commit.sha);
 
   return (
     <div className="commit-graph">
@@ -76,6 +116,17 @@ export function CommitGraph({ layout }: CommitGraphProps) {
           // Lets keyboard users scroll: WebKit does not make scrollers focusable.
           tabIndex={0}
           data-testid="commit-graph-body"
+          onMouseMove={(e) => {
+            pointer.current = { x: e.clientX, y: e.clientY };
+            leaveCopy(e.clientX, e.clientY);
+          }}
+          onMouseLeave={() => {
+            pointer.current = null;
+            setHovered(null);
+          }}
+          // The rows move under a still pointer, and Chrome sends no mouse move
+          // for that: check the copy against the last pointer position.
+          onScroll={() => pointer.current && leaveCopy(pointer.current.x, pointer.current.y)}
         >
           <div className="commit-graph-rows" style={{ height: virtualizer.getTotalSize() }}>
             {items.map((item) => {
@@ -85,6 +136,8 @@ export function CommitGraph({ layout }: CommitGraphProps) {
                 <CommitRow
                   key={row.commit.sha}
                   layout={layout}
+                  labels={labels}
+                  onLabelHover={onLabelHover}
                   index={item.index}
                   top={item.start}
                   columns={columns}
@@ -99,7 +152,20 @@ export function CommitGraph({ layout }: CommitGraphProps) {
                 top={firstItem.start}
                 left={BRANCH_COLUMN_WIDTH}
                 width={graphWidth}
+                labels={labels}
               />
+            )}
+            {hoveredItem && hoveredRow && hoveredLabels && (
+              // A copy of the hovered label, after the canvas so it is drawn above it.
+              <div
+                ref={copyRef}
+                className="ref-overlay"
+                aria-hidden="true"
+                data-sha={hoveredRow.commit.sha}
+                style={{ top: hoveredItem.start, height: ROW_HEIGHT }}
+              >
+                <RefLabelContent labels={hoveredLabels} lane={hoveredRow.lane} active />
+              </div>
             )}
           </div>
         </div>
@@ -123,6 +189,9 @@ export function CommitGraph({ layout }: CommitGraphProps) {
 interface CommitRowProps {
   /** The whole layout (a stable object), so the memo below holds while scrolling. */
   layout: GraphLayout<Commit>;
+  /** All labels (a stable object, like the layout). */
+  labels: RefLabels;
+  onLabelHover: LabelHover;
   index: number;
   /** Pixels from the top of the scroll area. */
   top: number;
@@ -130,9 +199,17 @@ interface CommitRowProps {
 }
 
 /** One commit row. Memoized: while scrolling, only rows that come into view render. */
-const CommitRow = memo(function CommitRow({ layout, index, top, columns }: CommitRowProps) {
+const CommitRow = memo(function CommitRow({
+  layout,
+  labels,
+  onLabelHover,
+  index,
+  top,
+  columns,
+}: CommitRowProps) {
   const row = layout.rows[index];
   if (!row) return null;
+  const rowLabels = labels.get(row.commit.sha);
   const style = {
     gridTemplateColumns: columns,
     height: ROW_HEIGHT,
@@ -153,7 +230,16 @@ const CommitRow = memo(function CommitRow({ layout, index, top, columns }: Commi
       data-node-kind={isMergeCommit(row.commit) ? "merge" : "commit"}
       style={style}
     >
-      <div role="cell" className="commit-refs" />
+      <div role="cell" className="commit-refs">
+        {rowLabels && (
+          <RefCell
+            sha={row.commit.sha}
+            lane={row.lane}
+            labels={rowLabels}
+            onLabelHover={onLabelHover}
+          />
+        )}
+      </div>
       {/* Drawn by GraphCanvas, over this cell; the label names the node for screen readers. */}
       <div
         role="cell"
@@ -166,6 +252,38 @@ const CommitRow = memo(function CommitRow({ layout, index, top, columns }: Commi
     </div>
   );
 });
+
+interface RefCellProps {
+  sha: string;
+  lane: number;
+  labels: CommitLabels;
+  onLabelHover: LabelHover;
+}
+
+/**
+ * The Branch / Tag cell of a commit with refs: the label, then a line to the
+ * column's right edge, where the canvas continues it to the node.
+ */
+function RefCell({ sha, lane, labels, onLabelHover }: RefCellProps) {
+  // A row scrolled out of the DOM gets no mouseleave: drop its hover here.
+  useEffect(() => () => onLabelHover(sha, false), [sha, onLabelHover]);
+  return (
+    <>
+      <span
+        className="ref-label"
+        data-sha={sha}
+        onMouseEnter={() => onLabelHover(sha, true)}
+        onMouseLeave={(e) => onLabelHover(sha, false, { x: e.clientX, y: e.clientY })}
+      >
+        <RefLabelContent labels={labels} lane={lane} active={labels.head} />
+      </span>
+      <span
+        className="ref-connector"
+        style={{ backgroundColor: laneConnectorColor(lane, labels.head) }}
+      />
+    </>
+  );
+}
 
 function GearIcon() {
   return (

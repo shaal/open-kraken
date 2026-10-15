@@ -63,6 +63,16 @@ async function loadDemoFixture(): Promise<Fixture> {
   return module.default as unknown as Fixture;
 }
 
+/**
+ * The edge-case repository (`fixtures/edge-repo.json`): the demo repo plus
+ * upstreams, an annotated tag, several tags on one commit, a remote-only
+ * branch, a long branch name, renames, and a detached HEAD.
+ */
+export async function loadEdgeFixture(): Promise<Fixture> {
+  const module = await import("../../fixtures/edge-repo.json");
+  return module.default as unknown as Fixture;
+}
+
 function notFound(path: string): GitCommandError {
   return new GitCommandError({
     kind: "notARepository",

@@ -10,9 +10,11 @@ import {
   LANE_WIDTH,
   laneX,
   ROW_HEIGHT,
+  ROW_MID,
 } from "./geometry";
 import { layoutGraph } from "./lanes";
-import { laneColorValue, laneStreakColor } from "./palette";
+import { laneColorValue, laneConnectorColor, laneLabelColor, laneStreakColor } from "./palette";
+import { buildRefLabels } from "./refLabels";
 import { RecordingContext } from "../test/recordingContext";
 
 /** jsdom has no layout: give the scrolling body a real height, like a 560 px tall view. */
@@ -358,6 +360,224 @@ describe("CommitGraph", () => {
     });
   });
 
+  describe("ref labels (spec §1 Ref labels)", () => {
+    async function renderedLabels(fixture = "demo-repo") {
+      const graph = await createFixtureAdapter(
+        fixture === "edge-repo"
+          ? async () => (await import("../git/fixtureAdapter")).loadEdgeFixture()
+          : undefined,
+      ).graphData(fixture);
+      const layout = layoutGraph(graph.log);
+      const labels = buildRefLabels(graph.refs, graph.log);
+      render(<CommitGraph layout={layout} labels={labels} />);
+      const row = (subject: string) => {
+        const index = layout.rows.findIndex((r) => r.commit.subject === subject);
+        const el = document.querySelector<HTMLElement>(`[data-row-index="${index}"]`);
+        if (!el) throw new Error(`no row for ${subject}`);
+        return el;
+      };
+      return { layout, labels, row };
+    }
+    const pillOf = (row: HTMLElement) => row.querySelector<HTMLElement>(".ref-pill");
+    const icons = (el: HTMLElement | null) =>
+      [...(el?.querySelectorAll<SVGElement>("svg[data-icon]") ?? [])].map((i) => i.dataset.icon);
+
+    it("shows one pill per labeled commit, with its icons, in the Branch / Tag cell", async () => {
+      const { layout, labels, row } = await renderedLabels();
+      const pills = document.querySelectorAll(".ref-pill");
+      expect(pills).toHaveLength(7);
+      // Each pill is in its row's first cell; rows without refs have an empty cell.
+      for (const [i, r] of layout.rows.entries()) {
+        const cell = document.querySelector(`[data-row-index="${i}"] .commit-refs`);
+        expect(cell?.getAttribute("role")).toBe("cell");
+        expect(cell?.querySelectorAll(".ref-pill")).toHaveLength(labels.has(r.commit.sha) ? 1 : 0);
+      }
+      const main = pillOf(row("Update roadmap"));
+      expect(main?.querySelector(".ref-name")?.textContent).toBe("main");
+      expect(icons(main)).toEqual(["local"]);
+      expect(main?.querySelectorAll("svg")).toHaveLength(2); // the ✓, then the laptop
+      const remote = pillOf(row("Merge branch 'release/1.1'"));
+      expect(remote?.querySelector(".ref-name")?.textContent).toBe("main");
+      expect(remote?.title).toBe("origin/main");
+      expect(icons(remote)).toEqual(["remote"]);
+      const both = pillOf(row("Add regression test for crash"));
+      expect(icons(both)).toEqual(["local", "remote"]);
+      expect(both?.title).toBe("bugfix/crash-on-start\norigin/bugfix/crash-on-start");
+      expect(icons(pillOf(row("Document setup steps")))).toEqual(["tag"]);
+      // Only the checked-out branch has a ✓ (the only icon without data-icon).
+      expect(document.querySelectorAll(".ref-pill svg:not([data-icon])")).toHaveLength(1);
+    });
+
+    it("counts a commit's other refs in a +N badge that names them", async () => {
+      const { row } = await renderedLabels("edge-repo");
+      const metrics = row("Add metrics endpoint");
+      expect(pillOf(metrics)?.querySelector(".ref-name")?.textContent).toBe("nightly");
+      const more = metrics.querySelector<HTMLElement>(".ref-more");
+      expect(more?.querySelector("[aria-hidden]")?.textContent).toBe("+2");
+      expect(more?.title).toBe("qa/passed\nv1.2");
+      expect(more?.textContent).toBe("+2, 2 more: qa/passed, tag; v1.2, annotated tag");
+      const head = row("Update roadmap");
+      expect(pillOf(head)?.textContent).toBe("HEADHEAD, detached, checked out");
+      expect(head.querySelector(".ref-more")?.textContent).toBe("+1, 1 more: main, local branch");
+      expect(row("Rename build script").querySelector(".ref-more")).toBeNull();
+    });
+
+    it("tells screen readers the full names and kinds, not just the visible text", async () => {
+      const { row } = await renderedLabels();
+      const spoken = (subject: string) =>
+        pillOf(row(subject))?.querySelector(".visually-hidden")?.textContent;
+      expect(spoken("Update roadmap")).toBe("main, local branch, checked out");
+      expect(spoken("Merge branch 'release/1.1'")).toBe("origin/main, remote branch");
+      expect(spoken("Add remember-me option")).toBe(
+        "feature/login and origin/feature/login, local and remote branch",
+      );
+      // The visible name and the icons are hidden from them, so nothing is read twice.
+      const pill = pillOf(row("Update roadmap"));
+      expect(pill?.querySelector(".ref-name")?.getAttribute("aria-hidden")).toBe("true");
+      for (const svg of pill?.querySelectorAll("svg") ?? []) {
+        expect(svg.getAttribute("aria-hidden")).toBe("true");
+      }
+    });
+
+    it("colors the pill and its line by the node's lane, brighter for the checked-out commit", async () => {
+      const { layout, row } = await renderedLabels();
+      for (const [subject, active] of [
+        ["Update roadmap", true],
+        ["Prepare 1.1 release notes", false],
+        ["Highlight branch on hover", false],
+      ] as const) {
+        const el = row(subject);
+        const lane = layout.rows[Number(el.dataset.rowIndex)]?.lane ?? -1;
+        expect(pillOf(el)?.style.getPropertyValue("--label-bg")).toBe(laneLabelColor(lane, active));
+        const line = el.querySelector<HTMLElement>(".ref-connector");
+        // jsdom keeps the color as written, in rgb()/rgba() form.
+        expect(line).not.toBeNull();
+        expect(toHex(line?.style.backgroundColor ?? "")).toBe(laneConnectorColor(lane, active));
+      }
+      expect(laneLabelColor(2, false)).toBe("#a24bd84d");
+      expect(laneLabelColor(2, true)).toBe("#a24bd880");
+    });
+
+    it("expands the hovered label above the canvas, and drops it when the pointer leaves", async () => {
+      const { layout, row } = await renderedLabels("edge-repo");
+      const long = row("Add health endpoint");
+      const index = Number(long.dataset.rowIndex);
+      expect(document.querySelector(".ref-overlay")).toBeNull();
+      fireEvent.mouseEnter(long.querySelector(".ref-label") as HTMLElement);
+      const overlay = document.querySelector<HTMLElement>(".ref-overlay");
+      expect(overlay?.dataset.sha).toBe(layout.rows[index]?.commit.sha);
+      expect(overlay?.getAttribute("aria-hidden")).toBe("true");
+      expect(overlay?.style.top).toBe(`${index * ROW_HEIGHT}px`);
+      expect(overlay?.querySelector(".ref-name")?.textContent).toBe(
+        "feature/a-very-long-branch-name-that-does-not-fit-the-column",
+      );
+      const lane = layout.rows[index]?.lane ?? -1;
+      expect(
+        overlay?.querySelector<HTMLElement>(".ref-pill")?.style.getPropertyValue("--label-bg"),
+      ).toBe(laneLabelColor(lane, true));
+      // After the canvas in the scrolling content, so it is drawn above it.
+      const canvas = document.querySelector("canvas.commit-graph-canvas");
+      expect(canvas?.nextElementSibling).toBe(overlay);
+      // A leave from another label (events can come out of order) changes nothing.
+      // (The leaves go to a message cell: a leave to nothing also leaves the table.)
+      const message = long.querySelector(".commit-message");
+      fireEvent.mouseLeave(row("Draw commit lanes").querySelector(".ref-label") as HTMLElement, {
+        relatedTarget: message,
+      });
+      expect(document.querySelector(".ref-overlay")).not.toBeNull();
+      fireEvent.mouseLeave(long.querySelector(".ref-label") as HTMLElement, {
+        relatedTarget: message,
+      });
+      expect(document.querySelector(".ref-overlay")).toBeNull();
+    });
+
+    it("keeps the hover while the pointer is on the expanded copy, and ends it off the copy", async () => {
+      // jsdom has no layout: the copy's box is 24–418 px across, at its row's top.
+      const BODY_TOP = 110;
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        const scrolled = document.querySelector(".commit-graph-body")?.scrollTop ?? 0;
+        const top = BODY_TOP + parseFloat(this.style.top || "0") - scrolled;
+        return this.classList.contains("ref-overlay")
+          ? new DOMRect(24, top, 394, ROW_HEIGHT)
+          : new DOMRect(0, 0, 0, 0);
+      });
+      const { layout, row } = await renderedLabels("edge-repo");
+      const long = row("Add health endpoint");
+      const index = Number(long.dataset.rowIndex);
+      const y = BODY_TOP + index * ROW_HEIGHT + ROW_MID;
+      const label = long.querySelector(".ref-label") as HTMLElement;
+      const body = screen.getByTestId("commit-graph-body");
+      const copy = () => document.querySelector<HTMLElement>(".ref-overlay");
+      fireEvent.mouseEnter(label);
+      expect(copy()?.dataset.sha).toBe(layout.rows[index]?.commit.sha);
+      // Off the label but still on the copy (the expanded part): the hover stays.
+      const lanes = long.querySelector(".commit-lanes"); // the cell under the expanded part
+      fireEvent.mouseLeave(label, { clientX: 300, clientY: y, relatedTarget: lanes });
+      fireEvent.mouseMove(body, { clientX: 400, clientY: y });
+      expect(copy()).not.toBeNull();
+      // Off the copy: it ends.
+      fireEvent.mouseMove(body, { clientX: 430, clientY: y });
+      expect(copy()).toBeNull();
+      // A leave straight off the label and the copy ends it too.
+      fireEvent.mouseEnter(label);
+      fireEvent.mouseLeave(label, {
+        clientX: 300,
+        clientY: y + ROW_HEIGHT,
+        relatedTarget: row("Scaffold graph view").querySelector(".commit-lanes"),
+      });
+      expect(copy()).toBeNull();
+      // So does leaving the table.
+      fireEvent.mouseEnter(label);
+      fireEvent.mouseLeave(body);
+      expect(copy()).toBeNull();
+      // A scroll that moves the copy from under a still pointer ends it (Chrome
+      // sends no mouse move then); one that keeps the copy under it does not.
+      fireEvent.mouseEnter(label);
+      fireEvent.mouseMove(body, { clientX: 300, clientY: y });
+      scrollBodyTo(10);
+      expect(copy()).not.toBeNull();
+      scrollBodyTo(2 * ROW_HEIGHT);
+      expect(copy()).toBeNull();
+    });
+
+    it("keeps a newly entered label's hover when a move ends the old copy's", async () => {
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        const top = parseFloat(this.style.top || "0");
+        return this.classList.contains("ref-overlay")
+          ? new DOMRect(24, top, 100, ROW_HEIGHT)
+          : new DOMRect(0, 0, 0, 0);
+      });
+      const { row } = await renderedLabels();
+      const first = row("Update roadmap");
+      const second = row("Prepare 1.1 release notes");
+      fireEvent.mouseEnter(first.querySelector(".ref-label") as HTMLElement);
+      const firstCopy = document.querySelector<HTMLElement>(".ref-overlay");
+      // The pointer goes straight onto the next label. A move can be handled before
+      // the copy re-renders, while it still names the old commit: simulate that.
+      fireEvent.mouseEnter(second.querySelector(".ref-label") as HTMLElement);
+      firstCopy?.setAttribute("data-sha", "0".repeat(40));
+      fireEvent.mouseMove(screen.getByTestId("commit-graph-body"), { clientX: 900, clientY: 5 });
+      const copy = document.querySelector<HTMLElement>(".ref-overlay");
+      expect(copy).not.toBeNull();
+    });
+
+    it("moves the expanded label to the next hovered label", async () => {
+      const { layout, row } = await renderedLabels();
+      fireEvent.mouseEnter(row("Update roadmap").querySelector(".ref-label") as HTMLElement);
+      const next = row("Prepare 1.1 release notes");
+      fireEvent.mouseLeave(row("Update roadmap").querySelector(".ref-label") as HTMLElement);
+      fireEvent.mouseEnter(next.querySelector(".ref-label") as HTMLElement);
+      const overlays = document.querySelectorAll<HTMLElement>(".ref-overlay");
+      expect(overlays).toHaveLength(1);
+      expect(overlays[0]?.dataset.sha).toBe(layout.rows[Number(next.dataset.rowIndex)]?.commit.sha);
+      expect(overlays[0]?.querySelector(".ref-more")?.textContent).toContain("+1");
+    });
+  });
+
   describe("with 50 000 commits", () => {
     const layout = layoutGraph(syntheticGraph(50_000).log);
     const maxRows = VISIBLE_ROWS + 2 * OVERSCAN + 2;
@@ -424,6 +644,21 @@ describe("CommitGraph", () => {
       }
     });
 
+    it("drops a hovered label when its row scrolls out of the DOM", () => {
+      const graph = syntheticGraph(50_000);
+      const labels = buildRefLabels(graph.refs, graph.log);
+      render(<CommitGraph layout={layout} labels={labels} />);
+      const label = document.querySelector<HTMLElement>(`[data-row-index="0"] .ref-label`);
+      expect(label).not.toBeNull(); // main, at the top
+      fireEvent.mouseEnter(label as HTMLElement);
+      expect(document.querySelector(".ref-overlay")).not.toBeNull();
+      scrollBodyTo(25_000 * ROW_HEIGHT); // row 0 unmounts without a mouseleave
+      expect(document.querySelector(".ref-overlay")).toBeNull();
+      scrollBodyTo(0);
+      expect(document.querySelector('[data-row-index="0"] .ref-label')).not.toBeNull();
+      expect(document.querySelector(".ref-overlay")).toBeNull();
+    });
+
     it("reaches the last row", () => {
       render(<CommitGraph layout={layout} />);
       scrollBodyTo(50_000 * ROW_HEIGHT - VIEW_HEIGHT);
@@ -433,3 +668,13 @@ describe("CommitGraph", () => {
     });
   });
 });
+
+/** `rgb(1, 2, 3)` or `rgba(1, 2, 3, 0.5)` as `#010203` or `#01020380`. */
+function toHex(color: string): string {
+  const m = /^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/.exec(color);
+  if (!m) return color;
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  const [r, g, b] = [m[1], m[2], m[3]].map(Number) as [number, number, number];
+  const alpha = m[4] === undefined ? "" : hex(Math.round(Number(m[4]) * 255));
+  return `#${hex(r)}${hex(g)}${hex(b)}${alpha}`;
+}

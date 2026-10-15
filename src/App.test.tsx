@@ -31,6 +31,37 @@ describe("App", () => {
     expect(screen.getByTestId("load-time").textContent).toMatch(/^Loaded in \d+ ms$/);
   });
 
+  it("labels the demo repo's commits with their branches and tags", async () => {
+    // jsdom has no layout: give the graph's scrolling body a height, so rows render.
+    const height = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains("commit-graph-body") ? 560 : 0;
+      });
+    const width = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains("commit-graph-body") ? 1000 : 0;
+      });
+    try {
+      render(<App adapter={createFixtureAdapter()} />);
+      await screen.findByTestId("commit-count");
+      const names = [...document.querySelectorAll(".ref-pill .ref-name")].map((n) => n.textContent);
+      expect(names).toEqual([
+        "main",
+        "feature/graph-view",
+        "main",
+        "release/1.1",
+        "bugfix/crash-on-start",
+        "feature/login",
+        "v1.0",
+      ]);
+    } finally {
+      height.mockRestore();
+      width.mockRestore();
+    }
+  });
+
   it("starts idle without a command-line repo, and opens a picked folder", async () => {
     const pickFolder = vi.fn(async () => "demo-repo");
     render(<App adapter={fakeAdapter({ pickFolder })} />);

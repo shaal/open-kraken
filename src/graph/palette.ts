@@ -31,3 +31,21 @@ export function laneColorValue(lane: number): string {
 export function laneStreakColor(lane: number): string {
   return `${laneColorValue(lane)}29`;
 }
+
+/**
+ * A ref label's background: the lane color at 30 %, or at 50 % for the
+ * commit HEAD points at and for a hovered label. White text on it keeps a
+ * contrast of 4.5:1 or more for every lane color, on the table's background
+ * and on a hovered row's (palette.test.ts).
+ */
+export function laneLabelColor(lane: number, active: boolean): string {
+  return `${laneColorValue(lane)}${active ? "80" : "4d"}`;
+}
+
+/**
+ * The line from a ref label to its node: the lane color at 50 %, or the full
+ * color for the commit HEAD points at.
+ */
+export function laneConnectorColor(lane: number, active: boolean): string {
+  return active ? laneColorValue(lane) : `${laneColorValue(lane)}80`;
+}
