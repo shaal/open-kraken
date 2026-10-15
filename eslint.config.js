@@ -45,5 +45,10 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // Node, but recordFrames() runs inside the page.
+    files: ["scripts/perf/scroll-bench.js"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
   prettier,
 );

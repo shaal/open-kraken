@@ -10,16 +10,177 @@
   background-color: #1b1d21;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
 }
 
+/* The app fills the window; an open repository gives the commit graph all the
+   height left under the summary. */
 .app {
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 16px 24px 0;
+  overflow: auto;
 }
 
 .app h1 {
   margin: 0 0 8px;
   font-size: 20px;
   font-weight: 600;
+}
+
+.repo-view {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.repo-summary {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding-bottom: 12px;
+}
+
+.repo-summary h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.repo-summary p {
+  margin: 0;
+}
+
+.repo-summary .path,
+.repo-summary .timing {
+  color: #9aa0a6;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Commit table (spec §1 Table). */
+.commit-graph {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 160px;
+  margin: 0 -24px;
+  border-top: 1px solid #2c3036;
+}
+
+.commit-graph-table {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.commit-graph-header,
+.commit-row {
+  display: grid;
+  align-items: center;
+}
+
+.commit-graph-header {
+  flex: none;
+  overflow: hidden;
+  /* Same gutter as the scrolling body, so the columns line up with classic scroll bars. */
+  scrollbar-gutter: stable;
+  border-bottom: 1px solid #2c3036;
+  background-color: #202328;
+  color: #9aa0a6;
+  font-size: 12px;
+}
+
+.commit-graph-header > div,
+.commit-row > div {
+  overflow: hidden;
+  padding: 0 8px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The first column starts where the summary text above starts. */
+.commit-graph-header > div:first-child,
+.commit-row > div:first-child {
+  padding-left: 24px;
+}
+
+/* Room for the gear button over the end of the header row. */
+.commit-graph-header > div:last-child {
+  padding-right: 40px;
+}
+
+/* At the right end of the header row (spec §1 Table). */
+.commit-graph-settings {
+  position: absolute;
+  top: 0;
+  right: 8px;
+}
+
+.commit-graph-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.commit-graph-body:focus-visible {
+  outline: 2px solid #4c8dff;
+  outline-offset: -2px;
+}
+
+.commit-graph-rows {
+  position: relative;
+  width: 100%;
+}
+
+.commit-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  /* A row's content never changes the size or layout of anything outside it. */
+  contain: strict;
+}
+
+.commit-row:hover {
+  background-color: #23262c;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #9aa0a6;
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
 }

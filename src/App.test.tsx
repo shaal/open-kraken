@@ -219,6 +219,39 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
 
+  it("shows the commit graph under the summary", async () => {
+    // jsdom has no layout; give the graph's scrolling body a height so rows render.
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("commit-graph-body") ? 600 : 0;
+    });
+    try {
+      render(<App adapter={createFixtureAdapter()} />);
+      const grid = await screen.findByRole("table", { name: "Commit graph" });
+      expect(grid.getAttribute("aria-rowcount")).toBe("20"); // header + 19 commits
+      expect(screen.getByRole("region", { name: "Repository summary" })).toBeTruthy();
+      expect(grid.querySelectorAll("[data-row-index]")).toHaveLength(19);
+      expect(grid.querySelector('[data-row-index="0"] .commit-message')?.textContent).toBe(
+        "Update roadmap",
+      );
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("shows an error, not a blank window, when the history cannot be laid out", async () => {
+    const fixture = createFixtureAdapter();
+    const graphData = async (root: string) => {
+      const graph = await fixture.graphData(root);
+      const first = graph.log[0];
+      return first ? { ...graph, log: [...graph.log, first] } : graph; // a sha twice
+    };
+    render(<App adapter={fakeAdapter({ initialRepoPath: async () => "demo-repo", graphData })} />);
+    expect((await screen.findByRole("alert")).textContent).toContain("duplicate commit");
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
   it("says when the working tree was not read", async () => {
     const fixture = createFixtureAdapter();
     const graphData = async (root: string) => {

@@ -12,7 +12,8 @@ Desktop git client with an interactive commit graph. Tauri 2 + React + TypeScrip
 - Rust: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p git-data`.
 - Fixture: `docs/fixtures/verify-demo-repo.sh`.
 - CI: `.github/workflows/ci.yml` runs on every PR (Ubuntu): the frontend checks, `cargo fmt --check`, `clippy`/`test` for git-data only (no Tauri build), the fixture check, and the generated-files check.
-- App: `pnpm tauri dev` (window titled "open-kraken"); `pnpm dev` serves only the frontend on port 1420.
+- App: `pnpm tauri dev` (window titled "open-kraken"); `pnpm dev` serves only the frontend on port 1420 (the demo fixture; `?synthetic=50000` serves a generated history of that many commits).
+- Scroll performance: `scripts/perf/scroll-bench.js` (usage at the top of the file; measure the production build, `pnpm build && pnpm preview`).
 
 Layout: `src/` React frontend (`src/graph/` holds the pure layout code: row order, lanes); `src-tauri/` Tauri app crate; `crates/git-data/` git CLI access with no Tauri dependency (keep it that way so CI can test it without webkit).
 

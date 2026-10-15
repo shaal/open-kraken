@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultAdapter, type GitAdapter } from "./git";
 import { toGitCommandError } from "./git/adapter";
+import type { Commit } from "./git/bindings/Commit";
 import type { ErrorInfo } from "./git/bindings/ErrorInfo";
 import type { GraphData } from "./git/bindings/GraphData";
 import type { RefKind } from "./git/bindings/RefKind";
 import type { RepoInfo } from "./git/bindings/RepoInfo";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { CommitGraph } from "./graph/CommitGraph";
+import { layoutGraph, type GraphLayout } from "./graph/lanes";
 import { logError, logInfo } from "./log";
 
 type RepoState =
   | { phase: "idle" }
   | { phase: "loading"; path: string }
-  | { phase: "loaded"; info: RepoInfo; graph: GraphData; loadMs: number }
+  | {
+      phase: "loaded";
+      /** Which open this is: a new one remounts the view (scroll position, errors). */
+      loadId: number;
+      info: RepoInfo;
+      graph: GraphData;
+      layout: GraphLayout<Commit>;
+      loadMs: number;
+    }
   | { phase: "error"; path: string; error: ErrorInfo };
 
 export function App({ adapter }: { adapter?: GitAdapter }) {
@@ -34,9 +46,15 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
         const info = await git.openRepo(path);
         const graph = await git.graphData(info.root);
         if (request !== latestRequest.current) return;
-        const loadMs = performance.now() - started;
-        setState({ phase: "loaded", info, graph, loadMs });
-        logInfo(`opened ${info.root}: ${graph.log.length} commits in ${Math.round(loadMs)} ms`);
+        const layoutStarted = performance.now();
+        const layout = layoutGraph(graph.log);
+        const loadMs = performance.now() - started; // reading and layout
+        const layoutMs = performance.now() - layoutStarted;
+        setState({ phase: "loaded", loadId: request, info, graph, layout, loadMs });
+        logInfo(
+          `opened ${info.root}: ${graph.log.length} commits in ${Math.round(loadMs)} ms ` +
+            `(layout ${Math.round(layoutMs)} ms)`,
+        );
       } catch (error) {
         if (request !== latestRequest.current) return;
         fail(path, error);
@@ -99,9 +117,11 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
         </section>
       )}
       {state.phase === "loaded" && (
-        <RepoSummary
+        <RepoView
+          key={state.loadId}
           info={state.info}
           graph={state.graph}
+          layout={state.layout}
           loadMs={state.loadMs}
           onOpenAnother={() => void chooseFolder()}
         />
@@ -123,17 +143,27 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
   );
 }
 
-function RepoSummary({
-  info,
-  graph,
-  loadMs,
-  onOpenAnother,
-}: {
+interface RepoViewProps {
   info: RepoInfo;
   graph: GraphData;
+  layout: GraphLayout<Commit>;
   loadMs: number;
   onOpenAnother: () => void;
-}) {
+}
+
+/** An open repository: a short summary above the commit graph. */
+function RepoView(props: RepoViewProps) {
+  return (
+    <div className="repo-view">
+      <RepoSummary {...props} />
+      <ErrorBoundary action="draw the commit graph">
+        <CommitGraph layout={props.layout} />
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+function RepoSummary({ info, graph, loadMs, onOpenAnother }: RepoViewProps) {
   const count = (kind: RefKind) => graph.refs.refs.filter((r) => r.kind === kind).length;
   const changes =
     graph.status.staged.length + graph.status.unstaged.length + graph.status.conflicted.length;
@@ -144,11 +174,11 @@ function RepoSummary({
     heading.current?.focus();
   }, [info.root]);
   return (
-    <section aria-label="Repository summary">
+    <section aria-label="Repository summary" className="repo-summary">
       <h2 ref={heading} tabIndex={-1}>
         {info.name}
       </h2>
-      <p className="path">{info.root}</p>
+      {info.root !== info.name && <p className="path">{info.root}</p>}
       <ul className="facts">
         <li data-testid="commit-count">{plural(graph.log.length, "commit")}</li>
         <li>{plural(count("localBranch"), "branch", "branches")}</li>

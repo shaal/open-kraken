@@ -78,10 +78,15 @@ Probes (how each task is verified):
 
 ## Graph view
 
-- [ ] **Graph table with virtualization** (§1 Table)
+- [x] **Graph table with virtualization** (§1 Table)
   - Columns: Branch / Tag, Graph, Commit message. Constant row height. Header row with a gear icon.
   - Rows virtualized with `@tanstack/react-virtual`. 50 000 synthetic commits scroll without frame drops in the browser.
   - Probe: ui (fixture adapter; DOM row count stays bounded while scrolling; screenshot).
+  - Done, with open items below. In a browser, `?synthetic=<count>` serves a generated history (1 to 1 000 000 commits, with refs). `scripts/perf/scroll-bench.js` scrolls with real wheel events (every 16 ms) and first checks that it detects injected stalls, a long frame and blank rows; each run fails unless the graph really scrolled. Production build (`pnpm build && pnpm preview`), headless Chrome 155, 1280×800, 50 000 commits: 35–45 rows in the DOM; every visible row was in the DOM at every animation frame (main-thread state; pixels not sampled); 1–3 ms of main-thread work per frame (3–5 ms with the CPU 4× slower). Late frames (1.5 frame periods or more after the previous one) per 300 frames, across runs: 0–1 at 140 px per event and at 2800 px per event (about 100 rows per event); with the CPU 4× slower, 0–3 and 0–6.
+  - WebKit (Playwright's WebKit 2227, the Safari 26 engine, headless at 30 frames per second; run from a scratch harness with playwright-core 1.57.0 and the same in-page recorder): 35–45 rows in the DOM; no late or blank frames at 140 or 2800 px per wheel event; the list moves on 93 % of frames; Tab reaches the rows and Page Down scrolls them; 1 000 000 commits (28 000 000 px) scroll to the last row.
+  - Open: in headless Chrome the list position changes on only about 49 % of frames (main-thread view). This matches Chrome, not our code: a hand-written list that writes new row text in its scroll handler also gets 47 %; moving rows without new text gets 70 %, as does a static text list; an empty scroller gets 93 %. Overscan 10 to 80 (35 to 185 rows in the DOM) changes nothing, and WebKit moves the same list on 93 % of frames. Turning off the virtualizer's `flushSync` gives 64 % in Chrome but blank rows at 2800 px per event, so it stays on.
+  - Open: headless WebKit sometimes stops responding during long fast wheel scrolling (its content process then sleeps at 0 % CPU, so this is not a script loop). Over 5 interleaved rounds it stopped for the app 2 times, a static text list with no script 2 times, a hand-written list 1 time and an empty scroller 0 times (the app also stopped in 3 earlier runs). So it follows text painting in this environment (an older WebKit build on a newer macOS, screen locked), not our code. Check in the Tauri window (WKWebView), which is not measured yet.
+  - Open: in some early runs, the first wheel run had one late frame of 44–167 ms. It did not come back in later runs from a new browser, with long-frame attribution on.
 
 - [ ] **Graph lanes rendering** (§1 Nodes, Edges and lanes)
   - Per-row SVG: lane lines, orthogonal edges with rounded 90° elbows, node avatar circle with lane-colored ring (identicon from the email hash, no network requests), merge commits as small solid dots.
@@ -168,6 +173,9 @@ Probes (how each task is verified):
 - [ ] **Performance on large repos**
   - Synthetic repo with 100 000 commits: initial load and layout time measured and recorded in the README; scrolling stays smooth. Move layout to a Web Worker if the main thread blocks.
   - Baseline from the Tauri task (debug build, one `graph_data` call, measured by the frontend): 100 000 commits load in about 2.0 s (1.85–2.13 s over 3 runs); the 19-commit demo repo in about 210 ms, mostly process starts (about 12 git runs, and `Repo::open` runs twice). Candidates: cache the open `Repo`, page or stream the log, a compact encoding.
+  - Scrolling baseline and its open items: refer to "Graph table with virtualization" above (`scripts/perf/scroll-bench.js`). Re-run it after the lanes rendering task.
+  - Since the table task, "Loaded in" (and the open log line) also includes the layout; the log line gives the layout time separately. The baseline above is one `graph_data` call without layout.
+  - Rows are 28 px, so 1 000 000 commits are 28 000 000 px tall. Chrome and WebKit (Safari 26 engine) scroll that to the last row; engines limit element heights at some tens of millions of px, so check WebKitGTK (Linux) before very large repositories, and scale the scroll range if its limit is lower.
   - Probe: logic (benchmark) + app.
 
 - [ ] **Repository trust**
