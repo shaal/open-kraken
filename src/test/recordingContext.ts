@@ -7,6 +7,9 @@ export interface Call {
   strokeStyle: unknown;
   fillStyle: unknown;
   lineWidth: number;
+  /** The dash pattern in effect; empty for solid strokes. */
+  lineDash: number[];
+  globalCompositeOperation: GlobalCompositeOperation;
 }
 
 /** A canvas context for tests: it draws nothing and records every call. */
@@ -15,6 +18,9 @@ export class RecordingContext implements GraphContext {
   fillStyle: unknown = "";
   lineWidth = 1;
   lineCap: CanvasLineCap = "butt";
+  lineJoin: CanvasLineJoin = "miter";
+  lineDash: number[] = [];
+  globalCompositeOperation: GlobalCompositeOperation = "source-over";
   calls: Call[] = [];
 
   private record(name: string, args: number[]) {
@@ -24,6 +30,8 @@ export class RecordingContext implements GraphContext {
       strokeStyle: this.strokeStyle,
       fillStyle: this.fillStyle,
       lineWidth: this.lineWidth,
+      lineDash: this.lineDash,
+      globalCompositeOperation: this.globalCompositeOperation,
     });
   }
 
@@ -31,6 +39,10 @@ export class RecordingContext implements GraphContext {
     return this.calls.filter((c) => c.name === name);
   }
 
+  setLineDash(segments: number[]) {
+    this.lineDash = [...segments];
+    this.record("setLineDash", [...segments]);
+  }
   setTransform(...args: number[]) {
     this.record("setTransform", args);
   }

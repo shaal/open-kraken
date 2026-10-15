@@ -35,8 +35,18 @@ In menu labels, `{current}` is the checked-out branch, `{ref}` the clicked branc
 
 ### Special rows
 
-- **WIP row** (top, only with uncommitted changes): dashed hollow circle node in the current branch color. The message cell is an inline text input with placeholder `// WIP`. Change counts follow it (`✎ 1  + 1` = 1 modified, 1 added).
-- **Stash row**: dotted square node with a stash icon, joined to its base commit by a dotted line. Message = stash message.
+- **WIP row** (top, only with uncommitted changes): dashed hollow circle node in the current branch color, joined to HEAD's commit by a dotted line. The message cell is an inline text input with placeholder `// WIP`, and has no lane-colored bar. Change counts follow it (`✎ 1  + 1` = 1 modified, 1 added; the untracked `notes.txt` counts as added).
+- **Stash row**: dotted square node with a stash (tray) icon, joined to its base commit by a dotted line: down from the square, then a rounded elbow across into the base commit's node. Message = stash message without git's `On <branch>: ` prefix (`On main: WIP: experiment with caching` reads `WIP: experiment with caching`).
+- Inside both nodes is the background color: lines and the row streak do not show through.
+- Demo repo: the WIP row in lane 0 (main's), the stash row under it in lane 1, then `Update roadmap` (HEAD) in lane 0 and `Highlight branch on hover` in lane 1.
+
+Choices for cases the demo repo does not show `[choice]`:
+- Both rows take rows like commits (section 6): the WIP row is newer than every commit, with HEAD's commit as its parent; a stash row sits at the time the stash was made, with its base commit as its parent. Their lanes are chosen after all the commits' lanes, so they never move or recolor a commit: the leftmost lane that is free from the row down to the parent, else a new lane. "Free" means no node or line in that lane on those rows, and no elbow turning into it there, also in the parent's row (so the dotted turn never hides under the parent's own merge line); in the parent's row, the parent's own lane counts as free. When the parent's lane is free above it, it is the leftmost free one: nothing waited for the parent there, so the parent took the first empty lane, and every lane left of it carries a line through the row above the parent. The line then runs straight into the parent's node. The demo repo comes out as observed.
+- So a WIP or stash row can be in another lane than its parent, joined by a dotted elbow into the parent's node (as the observed stash is). It then takes that lane's color: the current branch's color only when it is in HEAD's lane, as in the demo.
+- No WIP row when the working tree was not read (`skipped`, refer to "Repository trust" in ROADMAP.md). A WIP row with no HEAD commit (a new repository) has no line; neither has a stash whose base commit is not in the history read.
+- The counts: each changed path counts once, by what happened to it between HEAD and the work tree: added (new in the index, untracked, or marked with `git add -N`), deleted (gone from the work tree, or a staged deletion), else modified (renames, type changes and conflicts too). A deleted count shows `−` in red. A count of zero is not shown (observed: no deleted count in the demo). The repository summary's "N changed files" counts the same way.
+- The `// WIP` input is drawn, but cannot be typed in: it comes with the commit form, which this roadmap defers.
+- A stash message keeps git's text when it has no `On <branch>: ` prefix (`WIP on main: 3588393 Update roadmap`), or nothing after it. The tooltip is git's whole message.
 
 ### Nodes
 

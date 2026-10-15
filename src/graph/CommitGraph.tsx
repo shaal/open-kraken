@@ -1,18 +1,18 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Commit } from "../git/bindings/Commit";
 import {
   BRANCH_COLUMN_WIDTH,
   graphColumnWidth,
-  isMergeCommit,
   laneX,
   ROW_HEIGHT,
+  SPECIAL_NODE_RADIUS,
 } from "./geometry";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphLayout } from "./lanes";
 import { laneColorValue, laneConnectorColor, laneStreakColor } from "./palette";
 import { RefLabelContent } from "./RefLabel";
 import { NO_REF_LABELS, type CommitLabels, type RefLabels } from "./refLabels";
+import { nodeKind, type ChangeCounts, type GraphNode, type NodeKind } from "./specialRows";
 
 /**
  * Rows rendered above and below the visible ones. They fill the view while a
@@ -21,7 +21,8 @@ import { NO_REF_LABELS, type CommitLabels, type RefLabels } from "./refLabels";
 const OVERSCAN = 10;
 
 export interface CommitGraphProps {
-  layout: GraphLayout<Commit>;
+  /** The commits, and the WIP and stash rows (`graphNodes`). */
+  layout: GraphLayout<GraphNode>;
   /** The Branch / Tag column's labels (`buildRefLabels`); none when left out. */
   labels?: RefLabels;
 }
@@ -186,9 +187,17 @@ export function CommitGraph({ layout, labels = NO_REF_LABELS }: CommitGraphProps
   );
 }
 
+/** The Graph cell's name for screen readers: the canvas draws the node. */
+const NODE_NAMES: Record<NodeKind, string> = {
+  commit: "Commit",
+  merge: "Merge commit",
+  wip: "Uncommitted changes",
+  stash: "Stash",
+};
+
 interface CommitRowProps {
   /** The whole layout (a stable object), so the memo below holds while scrolling. */
-  layout: GraphLayout<Commit>;
+  layout: GraphLayout<GraphNode>;
   /** All labels (a stable object, like the layout). */
   labels: RefLabels;
   onLabelHover: LabelHover;
@@ -198,7 +207,10 @@ interface CommitRowProps {
   columns: string;
 }
 
-/** One commit row. Memoized: while scrolling, only rows that come into view render. */
+/**
+ * One row: a commit, the WIP row or a stash (spec §1 Special rows). Memoized:
+ * while scrolling, only rows that come into view render.
+ */
 const CommitRow = memo(function CommitRow({
   layout,
   labels,
@@ -209,16 +221,19 @@ const CommitRow = memo(function CommitRow({
 }: CommitRowProps) {
   const row = layout.rows[index];
   if (!row) return null;
-  const rowLabels = labels.get(row.commit.sha);
+  const node = row.commit;
+  const kind = nodeKind(node);
+  const rowLabels = labels.get(node.sha);
   const style = {
     gridTemplateColumns: columns,
     height: ROW_HEIGHT,
     transform: `translateY(${top}px)`,
     // The streak and the message cell's bar (spec §1 Edges and lanes) take the
-    // node's lane color; the streak starts at the node.
+    // node's lane color; the streak starts at the node's center, or at the edge
+    // of a hollow node, whose inside shows the row's background.
     "--lane-color": laneColorValue(row.lane),
     "--streak-color": laneStreakColor(row.lane),
-    "--node-x": `${laneX(row.lane)}px`,
+    "--streak-x": `${laneX(row.lane) + (kind === "wip" || kind === "stash" ? SPECIAL_NODE_RADIUS : 0)}px`,
   } as CSSProperties;
   return (
     <div
@@ -227,31 +242,86 @@ const CommitRow = memo(function CommitRow({
       aria-rowindex={index + 2}
       data-row-index={index}
       data-lane={row.lane}
-      data-node-kind={isMergeCommit(row.commit) ? "merge" : "commit"}
+      data-node-kind={kind}
       style={style}
     >
       <div role="cell" className="commit-refs">
         {rowLabels && (
-          <RefCell
-            sha={row.commit.sha}
-            lane={row.lane}
-            labels={rowLabels}
-            onLabelHover={onLabelHover}
-          />
+          <RefCell sha={node.sha} lane={row.lane} labels={rowLabels} onLabelHover={onLabelHover} />
         )}
       </div>
       {/* Drawn by GraphCanvas, over this cell; the label names the node for screen readers. */}
-      <div
-        role="cell"
-        className="commit-lanes"
-        aria-label={isMergeCommit(row.commit) ? "Merge commit" : "Commit"}
-      />
-      <div role="cell" className="commit-message" title={row.commit.subject}>
-        {row.commit.subject}
-      </div>
+      <div role="cell" className="commit-lanes" aria-label={NODE_NAMES[kind]} />
+      {"kind" in node && node.kind === "wip" ? (
+        <div role="cell" className="commit-message wip-message">
+          <WipMessage changes={node.changes} />
+        </div>
+      ) : (
+        // A stash's tooltip has git's whole message, with the branch it was made on.
+        <div
+          role="cell"
+          className="commit-message"
+          title={"kind" in node ? node.stash.message : node.subject}
+        >
+          {node.subject}
+        </div>
+      )}
     </div>
   );
 });
+
+/**
+ * The WIP row's message cell: the `// WIP` placeholder of the commit summary,
+ * then the change counts (`✎ 1  + 1`). The summary becomes a text input with
+ * the commit form, which this roadmap defers; until then it is only drawn.
+ */
+function WipMessage({ changes }: { changes: ChangeCounts }) {
+  const counts = [
+    { key: "modified", n: changes.modified, icon: <PencilIcon /> },
+    { key: "added", n: changes.added, icon: <PlusIcon /> },
+    { key: "deleted", n: changes.deleted, icon: <MinusIcon /> },
+  ].filter((c) => c.n > 0);
+  return (
+    <>
+      <span className="wip-summary" aria-hidden="true">
+        {"// WIP"}
+      </span>
+      <span className="wip-changes" aria-hidden="true">
+        {counts.map((c) => (
+          <span key={c.key} className="wip-count" data-change={c.key}>
+            {c.icon}
+            {c.n}
+          </span>
+        ))}
+      </span>
+      <span className="visually-hidden">{counts.map((c) => `${c.n} ${c.key}`).join(", ")}</span>
+    </>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg className="wip-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" d="M10.8 2.2l3 3-8.2 8.2-3.9.9.9-3.9z" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg className="wip-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 2.5v11M2.5 8h11" fill="none" stroke="currentColor" strokeWidth="2.4" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg className="wip-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2.5 8h11" fill="none" stroke="currentColor" strokeWidth="2.4" />
+    </svg>
+  );
+}
 
 interface RefCellProps {
   sha: string;

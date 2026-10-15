@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFixtureAdapter } from "../git/fixtureAdapter";
 import { syntheticGraph } from "../git/syntheticAdapter";
 import { CommitGraph } from "./CommitGraph";
+import type { GraphData } from "../git/bindings/GraphData";
 import {
   BRANCH_COLUMN_WIDTH,
+  DOTTED_EDGE_DASH,
   graphColumnWidth,
   isMergeCommit,
   LANE_WIDTH,
@@ -15,6 +17,7 @@ import {
 import { layoutGraph } from "./lanes";
 import { laneColorValue, laneConnectorColor, laneLabelColor, laneStreakColor } from "./palette";
 import { buildRefLabels } from "./refLabels";
+import { graphNodes, WIP_KEY } from "./specialRows";
 import { RecordingContext } from "../test/recordingContext";
 
 /** jsdom has no layout: give the scrolling body a real height, like a 560 px tall view. */
@@ -149,7 +152,7 @@ describe("CommitGraph", () => {
         const lane = layout.rows[i]?.lane ?? -1;
         expect(row.dataset.lane).toBe(String(lane));
         expect(row.style.getPropertyValue("--lane-color")).toBe(laneColorValue(lane));
-        expect(row.style.getPropertyValue("--node-x")).toBe(`${laneX(lane)}px`);
+        expect(row.style.getPropertyValue("--streak-x")).toBe(`${laneX(lane)}px`);
         expect(row.style.getPropertyValue("--streak-color")).toBe(laneStreakColor(lane));
       });
       // The demo repo's lanes, as GitKraken showed them: main 0, graph-view and login 1,
@@ -357,6 +360,114 @@ describe("CommitGraph", () => {
       expect(ctx.named("arc").filter((a) => a.fillStyle && a.args[2] === 5)).toHaveLength(2);
       // No images, links or SVG: nothing that could load from the network.
       expect(document.querySelector("img, image, svg.commit-graph-svg, a[href]")).toBeNull();
+    });
+  });
+
+  describe("WIP and stash rows (spec §1 Special rows)", () => {
+    async function renderedSpecial(edit?: (graph: GraphData) => GraphData) {
+      const ctx = new RecordingContext();
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+        () => ctx as unknown as CanvasRenderingContext2D,
+      );
+      const graph = await createFixtureAdapter().graphData("demo-repo");
+      const layout = layoutGraph(graphNodes(edit ? edit(graph) : graph));
+      render(<CommitGraph layout={layout} labels={buildRefLabels(graph.refs, graph.log)} />);
+      const rows = [...document.querySelectorAll<HTMLElement>("[data-row-index]")];
+      expect(rows).toHaveLength(layout.rows.length);
+      return { graph, layout, rows, ctx };
+    }
+
+    it("shows the WIP row first, then the stash, then the commits", async () => {
+      const { layout, rows } = await renderedSpecial();
+      expect(rows.slice(0, 3).map((r) => r.dataset.nodeKind)).toEqual(["wip", "stash", "commit"]);
+      expect(rows.slice(0, 3).map((r) => r.dataset.lane)).toEqual(["0", "1", "0"]);
+      expect(layout.rows[0]?.commit.sha).toBe(WIP_KEY);
+      const names = rows
+        .slice(0, 4)
+        .map((r) => r.querySelector(".commit-lanes")?.getAttribute("aria-label"));
+      expect(names).toEqual(["Uncommitted changes", "Stash", "Commit", "Commit"]);
+      // Only the commit HEAD points at has the main label, not the rows above it.
+      expect(rows.map((r) => r.querySelector(".ref-label") !== null).slice(0, 3)).toEqual([
+        false,
+        false,
+        true,
+      ]);
+    });
+
+    it("shows the // WIP placeholder and the change counts, and says them to screen readers", async () => {
+      const { rows } = await renderedSpecial();
+      const cell = rows[0]?.querySelector(".commit-message");
+      expect(cell?.classList.contains("wip-message")).toBe(true);
+      expect(cell?.querySelector(".wip-summary")?.textContent).toBe("// WIP");
+      const counts = [...(cell?.querySelectorAll<HTMLElement>(".wip-count") ?? [])];
+      expect(counts.map((c) => [c.dataset.change, c.textContent])).toEqual([
+        ["modified", "1"],
+        ["added", "1"],
+      ]);
+      expect(counts.every((c) => c.querySelector("svg.wip-icon") !== null)).toBe(true);
+      // The drawn parts are hidden from screen readers; the counts are said in words.
+      expect(cell?.querySelector(".wip-summary")?.getAttribute("aria-hidden")).toBe("true");
+      expect(cell?.querySelector(".wip-changes")?.getAttribute("aria-hidden")).toBe("true");
+      expect(cell?.querySelector(".visually-hidden")?.textContent).toBe("1 modified, 1 added");
+      // The commit form is deferred: nothing to type in yet.
+      expect(rows[0]?.querySelector("input, textarea, [contenteditable]")).toBeNull();
+    });
+
+    it("shows a deleted count, and leaves out the counts that are zero", async () => {
+      const { rows } = await renderedSpecial((graph) => ({
+        ...graph,
+        status: {
+          staged: [{ path: "a.txt", oldPath: null, kind: "deleted" }],
+          unstaged: [{ path: "b.txt", oldPath: null, kind: "deleted" }],
+          conflicted: [],
+          skipped: null,
+        },
+      }));
+      const cell = rows[0]?.querySelector(".commit-message");
+      const counts = [...(cell?.querySelectorAll<HTMLElement>(".wip-count") ?? [])];
+      expect(counts.map((c) => [c.dataset.change, c.textContent])).toEqual([["deleted", "2"]]);
+      expect(cell?.querySelector(".visually-hidden")?.textContent).toBe("2 deleted");
+    });
+
+    it("has no WIP row for a clean tree", async () => {
+      const { rows } = await renderedSpecial((graph) => ({
+        ...graph,
+        status: { staged: [], unstaged: [], conflicted: [], skipped: null },
+      }));
+      expect(rows.map((r) => r.dataset.nodeKind).slice(0, 2)).toEqual(["stash", "commit"]);
+      expect(document.querySelector(".wip-message")).toBeNull();
+    });
+
+    it("shows the stash message without git's branch prefix, and the whole message on hover", async () => {
+      const { rows } = await renderedSpecial();
+      const stash = rows[1];
+      const cell = stash?.querySelector(".commit-message");
+      expect(cell?.textContent).toBe("WIP: experiment with caching");
+      expect(cell?.getAttribute("title")).toBe("On main: WIP: experiment with caching");
+      expect(cell?.classList.contains("wip-message")).toBe(false);
+      // The streak and the message bar take the stash's lane color.
+      expect(stash?.style.getPropertyValue("--lane-color")).toBe(laneColorValue(1));
+      expect(stash?.style.getPropertyValue("--streak-color")).toBe(laneStreakColor(1));
+      // The streak starts at the hollow node's edge, as for the WIP row.
+      expect(stash?.style.getPropertyValue("--streak-x")).toBe(`${laneX(1) + 10}px`);
+      expect(rows[0]?.style.getPropertyValue("--streak-x")).toBe(`${laneX(0) + 10}px`);
+      expect(rows[2]?.style.getPropertyValue("--streak-x")).toBe(`${laneX(0)}px`);
+    });
+
+    it("draws the dotted edges and the special nodes on the canvas", async () => {
+      const { ctx } = await renderedSpecial();
+      expect(ctx.named("setLineDash").map((c) => c.args)).toEqual([
+        [...DOTTED_EDGE_DASH],
+        [],
+        expect.any(Array), // the WIP ring's dashes
+        [],
+      ]);
+      // The stash node's 24 dots, in row 1 and the stash's lane color.
+      const dots = ctx
+        .named("arc")
+        .filter((c) => (c.args[1] ?? 0) >= ROW_HEIGHT && (c.args[1] ?? 0) < 2 * ROW_HEIGHT)
+        .filter((c) => c.fillStyle === laneColorValue(1));
+      expect(dots).toHaveLength(24);
     });
   });
 

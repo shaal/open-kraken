@@ -31,6 +31,23 @@ describe("App", () => {
     expect(screen.getByTestId("load-time").textContent).toMatch(/^Loaded in \d+ ms$/);
   });
 
+  it("counts a file changed in the index and again in the work tree once, as the WIP row does", async () => {
+    const fixture = createFixtureAdapter();
+    const graphData = async (root: string) => {
+      const graph = await fixture.graphData(root);
+      return {
+        ...graph,
+        status: {
+          ...graph.status,
+          staged: [{ path: "README.md", oldPath: null, kind: "modified" as const }],
+        },
+      };
+    };
+    render(<App adapter={fakeAdapter({ initialRepoPath: async () => "demo-repo", graphData })} />);
+    await screen.findByRole("heading", { level: 2, name: "demo-repo" });
+    expect(screen.getAllByRole("listitem").at(-1)?.textContent).toBe("2 changed files");
+  });
+
   it("labels the demo repo's commits with their branches and tags", async () => {
     // jsdom has no layout: give the graph's scrolling body a height, so rows render.
     const height = vi
@@ -260,10 +277,18 @@ describe("App", () => {
     try {
       render(<App adapter={createFixtureAdapter()} />);
       const grid = await screen.findByRole("table", { name: "Commit graph" });
-      expect(grid.getAttribute("aria-rowcount")).toBe("20"); // header + 19 commits
+      // The header, the WIP row, the stash and 19 commits (spec §1 Special rows).
+      expect(grid.getAttribute("aria-rowcount")).toBe("22");
       expect(screen.getByRole("region", { name: "Repository summary" })).toBeTruthy();
-      expect(grid.querySelectorAll("[data-row-index]")).toHaveLength(19);
-      expect(grid.querySelector('[data-row-index="0"] .commit-message')?.textContent).toBe(
+      expect(grid.querySelectorAll("[data-row-index]")).toHaveLength(21);
+      const kinds = [...grid.querySelectorAll<HTMLElement>("[data-row-index]")]
+        .slice(0, 3)
+        .map((row) => row.dataset.nodeKind);
+      expect(kinds).toEqual(["wip", "stash", "commit"]);
+      expect(grid.querySelector('[data-row-index="1"] .commit-message')?.textContent).toBe(
+        "WIP: experiment with caching",
+      );
+      expect(grid.querySelector('[data-row-index="2"] .commit-message')?.textContent).toBe(
         "Update roadmap",
       );
     } finally {

@@ -7,6 +7,7 @@ import {
   isMergeCommit,
   laneX,
   segmentLane,
+  traceDottedSegment,
   traceSegment,
 } from "./geometry";
 import type { Segment } from "./lanes";
@@ -117,5 +118,67 @@ describe("node and color helpers", () => {
     expect(segmentLane({ kind: "line", lane: 3, top: true, bottom: true })).toBe(3);
     expect(segmentLane({ kind: "elbow", from: 0, to: 2, toward: "down" })).toBe(2);
     expect(segmentLane({ kind: "elbow", from: 4, to: 1, toward: "up" })).toBe(1);
+  });
+});
+
+describe("traceDottedSegment", () => {
+  /** The path calls a dotted segment makes, in row `top`. */
+  function trace(segment: Segment, top = 0): (string | number)[][] {
+    const calls: (string | number)[][] = [];
+    traceDottedSegment(
+      {
+        moveTo: (...a) => calls.push(["moveTo", ...a]),
+        lineTo: (...a) => calls.push(["lineTo", ...a]),
+        arcTo: (...a) => calls.push(["arcTo", ...a]),
+      },
+      { ...segment, dotted: true },
+      top,
+    );
+    return calls;
+  }
+  const line = (top: boolean, bottom: boolean): Segment => ({ kind: "line", lane: 1, top, bottom });
+  const elbow = (from: number, to: number, toward: "up" | "down"): Segment => ({
+    kind: "elbow",
+    from,
+    to,
+    toward,
+  });
+
+  it("starts a line's parts on the 4 px dot grid: a bottom half just below the center", () => {
+    const x = laneX(1);
+    expect(trace(line(true, true), 56)).toEqual([
+      ["moveTo", x, 56],
+      ["lineTo", x, 56 + ROW_HEIGHT],
+    ]);
+    expect(trace(line(true, false))).toEqual([
+      ["moveTo", x, 0],
+      ["lineTo", x, ROW_MID],
+    ]);
+    expect(trace(line(false, true))).toEqual([
+      ["moveTo", x, 16],
+      ["lineTo", x, ROW_HEIGHT],
+    ]);
+    expect(trace(line(false, false))).toEqual([]);
+  });
+
+  it("traces an elbow's turn from the row edge, then its run from the node to where the turn ends", () => {
+    const mid = 56 + ROW_MID;
+    // Right and left, up and down: the turn's arc ends one radius before the
+    // corner, toward the node, exactly where the run ends.
+    for (const [from, to, toward, edge] of [
+      [0, 1, "up", 56],
+      [1, 0, "up", 56],
+      [0, 2, "down", 56 + ROW_HEIGHT],
+      [2, 0, "down", 56 + ROW_HEIGHT],
+    ] as const) {
+      const end = laneX(to) - Math.sign(laneX(to) - laneX(from)) * ELBOW_RADIUS;
+      expect(trace(elbow(from, to, toward), 56)).toEqual([
+        ["moveTo", laneX(to), edge],
+        ["arcTo", laneX(to), mid, laneX(from), mid, ELBOW_RADIUS],
+        ["moveTo", laneX(from), mid],
+        ["lineTo", end, mid],
+      ]);
+    }
+    expect(trace(elbow(1, 1, "up"))).toEqual([]);
   });
 });

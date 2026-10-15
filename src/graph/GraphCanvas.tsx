@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useReducer, useRef } from "react";
-import type { Commit } from "../git/bindings/Commit";
 import { logError } from "../log";
 import { drawGraphRows } from "./drawGraph";
 import { ROW_HEIGHT } from "./geometry";
 import type { GraphLayout } from "./lanes";
 import { NO_REF_LABELS, type RefLabels } from "./refLabels";
+import type { GraphNode } from "./specialRows";
 
 interface GraphCanvasProps {
-  layout: GraphLayout<Commit>;
+  layout: GraphLayout<GraphNode>;
   /** The first and last row in the DOM: the canvas covers exactly these rows. */
   first: number;
   last: number;

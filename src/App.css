@@ -169,13 +169,14 @@ body {
 }
 
 /* The lanes and nodes are drawn on one canvas over the Graph cells (GraphCanvas).
-   Each cell draws its row's streak: from the node to the message column, in the
-   node's lane color. */
+   Each cell draws its row's streak: from the node (from its center, or from the
+   edge of a hollow WIP or stash node) to the message column, in the node's lane
+   color. */
 .commit-row > .commit-lanes {
   height: 100%;
   padding: 0;
-  background: linear-gradient(var(--streak-color), var(--streak-color)) no-repeat var(--node-x)
-    3px / calc(100% - var(--node-x)) 22px;
+  background: linear-gradient(var(--streak-color), var(--streak-color)) no-repeat var(--streak-x)
+    3px / calc(100% - var(--streak-x)) 22px;
 }
 
 .commit-graph-canvas {
@@ -193,6 +194,57 @@ body {
 
 .commit-row:hover {
   background-color: var(--row-hover-color);
+}
+
+/* The WIP row (spec §1 Special rows): no bar; the commit summary's `// WIP`
+   placeholder, then the change counts. */
+.commit-row > .wip-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left-color: transparent;
+}
+
+.wip-summary {
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  width: 100px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  /* 8 px left of where the other rows' messages start, as in GitKraken. */
+  margin-left: -8px;
+  border: 1px solid #2c2f35;
+  border-radius: 4px;
+  background-color: #17191c;
+  color: #9aa0a6;
+  line-height: 18px;
+}
+
+.wip-changes {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.wip-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.wip-count[data-change="modified"] > .wip-icon {
+  color: #e0a050;
+}
+
+.wip-count[data-change="added"] > .wip-icon {
+  color: #45b86a;
+}
+
+.wip-count[data-change="deleted"] > .wip-icon {
+  color: #e5534b;
 }
 
 /* Ref labels (spec §1 Ref labels): a pill in the lane color, a +N badge, and a

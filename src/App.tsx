@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultAdapter, type GitAdapter } from "./git";
 import { toGitCommandError } from "./git/adapter";
-import type { Commit } from "./git/bindings/Commit";
 import type { ErrorInfo } from "./git/bindings/ErrorInfo";
 import type { GraphData } from "./git/bindings/GraphData";
 import type { RefKind } from "./git/bindings/RefKind";
@@ -10,6 +9,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { CommitGraph } from "./graph/CommitGraph";
 import { layoutGraph, type GraphLayout } from "./graph/lanes";
 import { buildRefLabels, type RefLabels } from "./graph/refLabels";
+import { countChanges, graphNodes, type GraphNode } from "./graph/specialRows";
 import { logError, logInfo } from "./log";
 
 type RepoState =
@@ -21,7 +21,7 @@ type RepoState =
       loadId: number;
       info: RepoInfo;
       graph: GraphData;
-      layout: GraphLayout<Commit>;
+      layout: GraphLayout<GraphNode>;
       labels: RefLabels;
       loadMs: number;
     }
@@ -49,7 +49,8 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
         const graph = await git.graphData(info.root);
         if (request !== latestRequest.current) return;
         const layoutStarted = performance.now();
-        const layout = layoutGraph(graph.log);
+        // The commits plus the WIP row and the stash rows (spec §1 Special rows).
+        const layout = layoutGraph(graphNodes(graph));
         // Built once per load, so its identity is stable and rows stay memoized.
         const labels = buildRefLabels(graph.refs, graph.log);
         const loadMs = performance.now() - started; // reading and layout
@@ -151,7 +152,7 @@ export function App({ adapter }: { adapter?: GitAdapter }) {
 interface RepoViewProps {
   info: RepoInfo;
   graph: GraphData;
-  layout: GraphLayout<Commit>;
+  layout: GraphLayout<GraphNode>;
   labels: RefLabels;
   loadMs: number;
   onOpenAnother: () => void;
@@ -171,8 +172,9 @@ function RepoView(props: RepoViewProps) {
 
 function RepoSummary({ info, graph, loadMs, onOpenAnother }: RepoViewProps) {
   const count = (kind: RefKind) => graph.refs.refs.filter((r) => r.kind === kind).length;
-  const changes =
-    graph.status.staged.length + graph.status.unstaged.length + graph.status.conflicted.length;
+  // Each changed path once, as the WIP row counts them.
+  const counts = countChanges(graph.status);
+  const changes = counts.modified + counts.added + counts.deleted;
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   // Move focus to the repository that just opened (keyboard and screen-reader users).
   const heading = useRef<HTMLHeadingElement>(null);

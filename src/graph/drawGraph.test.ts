@@ -1,25 +1,64 @@
 import { describe, expect, it } from "vitest";
-import { createFixtureAdapter } from "../git/fixtureAdapter";
+import { createFixtureAdapter, loadEdgeFixture } from "../git/fixtureAdapter";
 import { RecordingContext } from "../test/recordingContext";
 import { drawGraphRows } from "./drawGraph";
 import {
   AVATAR_RADIUS,
   AVATAR_RING,
+  DOTTED_EDGE_DASH,
   isMergeCommit,
   laneX,
   MERGE_DOT_RADIUS,
   ROW_HEIGHT,
   ROW_MID,
   segmentLane,
+  SPECIAL_NODE_RADIUS,
+  STASH_DOT_RADIUS,
+  STASH_SIDE,
+  traceDottedSegment,
   traceSegment,
+  WIP_RING_DASHES,
 } from "./geometry";
 import { identicon } from "./identicon";
 import { layoutGraph } from "./lanes";
 import { LANE_COLORS, laneColorValue, laneConnectorColor } from "./palette";
 import { buildRefLabels } from "./refLabels";
+import { graphNodes } from "./specialRows";
 
 async function demoLayout() {
   return layoutGraph((await createFixtureAdapter().graphData("demo-repo")).log);
+}
+
+/** The demo repo with its WIP row (row 0, lane 0) and stash (row 1, lane 1). */
+async function specialLayout() {
+  return layoutGraph(graphNodes(await createFixtureAdapter().graphData("demo-repo")));
+}
+
+/** The edge-case fixture with its WIP row and stash (a detached HEAD, a branch on it). */
+async function edgeLayout() {
+  return layoutGraph(
+    graphNodes(await createFixtureAdapter(loadEdgeFixture).graphData("edge-repo")),
+  );
+}
+
+/**
+ * The start points of the dotted strokes' subpaths: vertical ones (a line, or
+ * an elbow's turn) and horizontal ones (an elbow's run, a move then a line at
+ * the same height).
+ */
+function dottedSubpaths(ctx: RecordingContext) {
+  const vertical: [number, number][] = [];
+  const horizontal: [number, number][] = [];
+  const firstNode = ctx.calls.findIndex((c) => c.name === "arc");
+  const calls = ctx.calls.slice(0, firstNode);
+  calls.forEach((call, i) => {
+    if (call.name !== "moveTo" || call.lineDash.length === 0) return;
+    const [x = 0, y = 0] = call.args;
+    const next = calls[i + 1];
+    const flat = next?.name === "lineTo" && next.args[1] === y && next.args[0] !== x;
+    (flat ? horizontal : vertical).push([x, y]);
+  });
+  return { vertical, horizontal };
 }
 
 async function demoLabels() {
@@ -27,18 +66,21 @@ async function demoLabels() {
   return buildRefLabels(graph.refs, graph.log);
 }
 
-/** The path calls the layout's segments should make in rows first..last, per color. */
+/**
+ * The path calls the layout's segments should make in rows first..last, per
+ * color; dotted segments under "<color> dotted".
+ */
 function expectedTraces(
-  layout: Awaited<ReturnType<typeof demoLayout>>,
+  layout: Awaited<ReturnType<typeof specialLayout>>,
   first: number,
   last: number,
 ): Map<string, string[]> {
   const byColor = new Map<string, string[]>();
   for (let r = first; r <= last; r++) {
     for (const segment of layout.segmentsAt(r)) {
-      const color = laneColorValue(segmentLane(segment));
+      const color = `${laneColorValue(segmentLane(segment))}${segment.dotted ? " dotted" : ""}`;
       const calls = byColor.get(color) ?? [];
-      traceSegment(
+      (segment.dotted ? traceDottedSegment : traceSegment)(
         {
           moveTo: (...a) => calls.push(`moveTo ${a.join(" ")}`),
           lineTo: (...a) => calls.push(`lineTo ${a.join(" ")}`),
@@ -54,23 +96,38 @@ function expectedTraces(
 }
 
 /**
- * The path calls the canvas stroked, per color: the color is the one in effect
- * when stroke() painted the path, not when it was traced.
+ * The path calls the canvas stroked for lines and elbows, per color: the color
+ * is the one in effect when stroke() painted the path, not when it was traced.
+ * Strokes with the dotted-edge dash pattern are under "<color> dotted"; any
+ * other dash pattern fails. The nodes (from the first fill after the first
+ * stroke) are left out.
  */
 function strokedTraces(ctx: RecordingContext): Map<string, string[]> {
   const byColor = new Map<string, string[]>();
   let pending: string[] = [];
+  let stroked = false;
   for (const call of ctx.calls) {
+    if (stroked && ["arc", "fill", "fillRect"].includes(call.name)) break;
     if (call.name === "beginPath") pending = [];
     else if (["moveTo", "lineTo", "arcTo"].includes(call.name)) {
       pending.push(`${call.name} ${call.args.join(" ")}`);
     } else if (call.name === "stroke" && pending.length > 0) {
-      const color = String(call.strokeStyle);
+      stroked = true;
+      const dotted = call.lineDash.length > 0;
+      if (dotted) expect(call.lineDash).toEqual(DOTTED_EDGE_DASH);
+      const color = `${String(call.strokeStyle)}${dotted ? " dotted" : ""}`;
       byColor.set(color, [...(byColor.get(color) ?? []), ...pending]);
       pending = [];
     }
   }
   return byColor;
+}
+
+/** Where a recorded call is in the context's list; fails for a missing one. */
+function indexOfCall(ctx: RecordingContext, call: RecordingContext["calls"][number] | undefined) {
+  const index = call === undefined ? -1 : ctx.calls.indexOf(call);
+  expect(index).toBeGreaterThanOrEqual(0);
+  return index;
 }
 
 describe("drawGraphRows", () => {
@@ -271,5 +328,192 @@ describe("drawGraphRows", () => {
         `lineTo ${laneX(0)} ${2 * ROW_HEIGHT}`,
       ]),
     );
+  });
+  describe("WIP and stash rows (spec §1 Special rows)", () => {
+    it("strokes the dotted edges with the dot pattern, under the solid lines", async () => {
+      const layout = await specialLayout();
+      const last = layout.rows.length - 1;
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 0, last, 100);
+      const traces = strokedTraces(ctx);
+      expect(traces).toEqual(expectedTraces(layout, 0, last));
+      expect([...traces.keys()].filter((k) => k.endsWith("dotted"))).toEqual([
+        `${laneColorValue(0)} dotted`,
+        `${laneColorValue(1)} dotted`,
+      ]);
+      // Every dotted line stroke comes before every solid one (the nodes start
+      // with the WIP node's first arc).
+      const firstNode = ctx.calls.findIndex((c) => c.name === "arc");
+      const dashed = ctx.calls
+        .slice(0, firstNode)
+        .filter((c) => c.name === "stroke")
+        .map((c) => c.lineDash.length > 0);
+      expect(dashed).toEqual([true, true, false, false, false]);
+    });
+
+    it("strokes the dotted edges of a window of rows from the top of the canvas", async () => {
+      const layout = await specialLayout();
+      for (const [first, last] of [
+        [1, 3],
+        [2, 6],
+      ] as const) {
+        const ctx = new RecordingContext();
+        drawGraphRows(ctx, layout, first, last, 100);
+        expect(strokedTraces(ctx)).toEqual(expectedTraces(layout, first, last));
+      }
+    });
+
+    it("starts every dotted subpath on the dot grid, so the dots line up across rows", async () => {
+      const period = DOTTED_EDGE_DASH.reduce((a, b) => a + b, 0);
+      expect(ROW_HEIGHT % period).toBe(0);
+      for (const layout of [await specialLayout(), await edgeLayout()]) {
+        for (const first of [0, 1, 2]) {
+          const ctx = new RecordingContext();
+          drawGraphRows(ctx, layout, first, 6, 100);
+          const { vertical, horizontal } = dottedSubpaths(ctx);
+          expect(vertical.length).toBeGreaterThan(0);
+          for (const [, y] of vertical) expect(y % period).toBe(0);
+          // A horizontal run starts at the center of the node it leaves.
+          for (const [x, y] of horizontal) {
+            const row = layout.rows[first + (y - ROW_MID) / ROW_HEIGHT];
+            expect(x).toBe(laneX(row?.lane ?? -1));
+          }
+        }
+      }
+      // The WIP row's line leaves its node from below the center, under the node.
+      const segment = { kind: "line", lane: 0, top: false, bottom: true, dotted: true } as const;
+      const calls: number[][] = [];
+      traceDottedSegment(
+        { moveTo: (...a) => calls.push(a), lineTo: (...a) => calls.push(a), arcTo: () => {} },
+        segment,
+      );
+      const startY = calls[0]?.[1] ?? 0;
+      expect(startY).toBeGreaterThanOrEqual(ROW_MID);
+      expect(startY).toBeLessThan(ROW_MID + SPECIAL_NODE_RADIUS);
+    });
+
+    it("puts the dots of several dotted elbows leaving one node in the same places", async () => {
+      // Edge fixture: the WIP row (lane 1) and the stash (lane 2) both turn up
+      // from HEAD's node (Update roadmap, lane 0, row 3).
+      const layout = await edgeLayout();
+      const head = layout.rows.findIndex((r) => r.commit.sha === layout.rows[0]?.commit.parents[0]);
+      expect(head).toBe(3);
+      const ups = layout.segmentsAt(head).filter((s) => s.kind === "elbow" && s.dotted);
+      expect(ups).toHaveLength(2);
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 0, 6, 100);
+      const runs = dottedSubpaths(ctx).horizontal.filter(
+        ([, y]) => y === head * ROW_HEIGHT + ROW_MID,
+      );
+      // Both runs start at the node's center and go right: the same dash phase.
+      expect(runs).toEqual([
+        [laneX(0), head * ROW_HEIGHT + ROW_MID],
+        [laneX(0), head * ROW_HEIGHT + ROW_MID],
+      ]);
+    });
+
+    it("draws the WIP node as a hollow circle with a dashed ring in its lane color", async () => {
+      const layout = await specialLayout();
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 0, 3, 100);
+      const radius = AVATAR_RADIUS - AVATAR_RING / 2;
+      const atWip = ctx.named("arc").filter((a) => a.args[0] === laneX(0) && a.args[1] === ROW_MID);
+      expect(atWip).toHaveLength(2);
+      const [clear, ring] = atWip;
+      // The inside is cleared, so the row's own background shows there.
+      expect(clear?.args).toEqual([laneX(0), ROW_MID, SPECIAL_NODE_RADIUS, 0, 2 * Math.PI]);
+      expect(clear?.globalCompositeOperation).toBe("destination-out");
+      const clearFill = ctx.calls.slice(indexOfCall(ctx, clear)).find((c) => c.name === "fill");
+      expect(clearFill?.globalCompositeOperation).toBe("destination-out");
+      expect(ring?.globalCompositeOperation).toBe("source-over");
+      expect(ring?.strokeStyle).toBe(laneColorValue(0));
+      expect(ring?.lineWidth).toBe(AVATAR_RING);
+      // 12 dashes, a whole number around the circle, one centered at the top.
+      const [start = 0, end = 0] = ring?.args.slice(3) ?? [];
+      expect(end - start).toBeCloseTo(2 * Math.PI);
+      const [dash = 0, gap = 0] = ring?.lineDash ?? [];
+      expect(WIP_RING_DASHES * (dash + gap)).toBeCloseTo(2 * Math.PI * radius);
+      expect(start + dash / radius / 2).toBeCloseTo(-Math.PI / 2);
+      // The stroke after the ring is solid again.
+      const next = ctx.calls
+        .slice(indexOfCall(ctx, ring) + 1)
+        .find((c) => c.name === "setLineDash");
+      expect(next?.args).toEqual([]);
+    });
+
+    it("draws the stash node as a square of dots with a tray icon in its lane color", async () => {
+      const layout = await specialLayout();
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, layout, 0, 3, 100);
+      const x = laneX(1);
+      const y = ROW_HEIGHT + ROW_MID; // row 1
+      const half = STASH_SIDE / 2;
+      // The inside is cleared first (the square the node covers).
+      const clearAt = ctx.calls.findIndex(
+        (c) =>
+          c.name === "moveTo" &&
+          c.args[0] === x - SPECIAL_NODE_RADIUS &&
+          c.args[1] === y - SPECIAL_NODE_RADIUS,
+      );
+      expect(clearAt).toBeGreaterThan(0);
+      const clearFill = ctx.calls.slice(clearAt).find((c) => c.name === "fill");
+      expect(clearFill?.globalCompositeOperation).toBe("destination-out");
+      // 7 round dots per side, 3 px apart: every corner and every side's middle,
+      // each once.
+      const dots = ctx.named("arc").filter((a) => a.args[2] === STASH_DOT_RADIUS);
+      const centers = dots.map((c) => `${c.args[0]},${c.args[1]}`);
+      const expected = new Set<string>();
+      for (let t = -half; t <= half; t += 3) {
+        for (const [dx, dy] of [
+          [t, -half],
+          [t, half],
+          [-half, t],
+          [half, t],
+        ] as const) {
+          expected.add(`${x + dx},${y + dy}`);
+        }
+      }
+      expect(expected.size).toBe(24);
+      expect(centers).toHaveLength(24);
+      expect(new Set(centers)).toEqual(expected);
+      expect(expected.has(`${x},${y + half}`)).toBe(true); // the line leaves under this one
+      expect(dots.every((c) => c.fillStyle === laneColorValue(1))).toBe(true);
+      expect(dots.every((c) => c.globalCompositeOperation === "source-over")).toBe(true);
+      // The tray: one stroke in the lane color, inside the square of dots.
+      const trayStroke = ctx
+        .named("stroke")
+        .find((c) => c.strokeStyle === laneColorValue(1) && c.lineWidth === 1.6);
+      const points = ctx.calls
+        .slice(indexOfCall(ctx, dots.at(-1)), indexOfCall(ctx, trayStroke))
+        .filter((c) => c.name === "moveTo" || c.name === "lineTo");
+      expect(points.length).toBeGreaterThan(8);
+      for (const p of points) {
+        expect(Math.abs((p.args[0] ?? 0) - x) + 0.8).toBeLessThan(half - STASH_DOT_RADIUS);
+        expect(Math.abs((p.args[1] ?? 0) - y) + 0.8).toBeLessThan(half - STASH_DOT_RADIUS);
+      }
+      // Neither node gets an avatar or a merge dot.
+      const avatarRings = ctx
+        .named("arc")
+        .filter((a) => a.args[2] === AVATAR_RADIUS - AVATAR_RING / 2 && a.args[1] === y);
+      expect(avatarRings).toHaveLength(0);
+    });
+
+    it("leaves no dash pattern, line join or erasing set, and sets none without WIP or stash rows", async () => {
+      const ctx = new RecordingContext();
+      drawGraphRows(ctx, await specialLayout(), 0, 20, 100);
+      expect(ctx.lineDash).toEqual([]);
+      expect(ctx.lineJoin).toBe("miter");
+      expect(ctx.globalCompositeOperation).toBe("source-over");
+      // Avatars and merge dots are solid and drawn normally.
+      for (const call of ctx.named("arc").filter((a) => a.args[1] !== ROW_MID)) {
+        expect(call.lineDash).toEqual([]);
+        if (call.args[2] !== STASH_DOT_RADIUS)
+          expect(call.globalCompositeOperation).toBe("source-over");
+      }
+      const plain = new RecordingContext();
+      drawGraphRows(plain, await demoLayout(), 0, 18, 100);
+      expect(plain.named("setLineDash")).toHaveLength(0);
+      expect(plain.calls.every((c) => c.globalCompositeOperation === "source-over")).toBe(true);
+    });
   });
 });
